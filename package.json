@@ -1,0 +1,37 @@
+{
+  "name": "web_dao_tao_modern",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.8.0",
+    "@radix-ui/react-dialog": "^1.1.17",
+    "docxtemplater": "^3.69.0",
+    "google-auth-library": "^10.9.0",
+    "googleapis": "^173.0.0",
+    "lucide-react": "^1.21.0",
+    "mssql": "^12.6.0",
+    "next": "16.2.9",
+    "pizzip": "^3.2.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "prisma": "^7.8.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
