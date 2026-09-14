@@ -10,15 +10,19 @@ export const metadata: Metadata = {
   description: "Hệ thống quản lý trung tâm đào tạo lái xe",
 };
 
-export default function RootLayout({
+import { getSession } from "@/lib/auth";
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getSession();
+
   return (
     <html lang="vi">
       <body className={`${inter.className} bg-slate-50 text-slate-900`}>
-        <AppShell>
+        <AppShell user={session}>
           {children}
         </AppShell>
       </body>

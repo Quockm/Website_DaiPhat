@@ -5,26 +5,28 @@ export const dynamic = 'force-dynamic';
 
 export default async function TransactionsPage(
   props: {
-    searchParams?: Promise<{ month?: string, year?: string }>;
+    searchParams?: Promise<{ date?: string, ket?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
-  const date = new Date();
-  const month = searchParams?.month ? parseInt(searchParams.month) : date.getMonth() + 1;
-  const year = searchParams?.year ? parseInt(searchParams.year) : date.getFullYear();
+  
+  // Default to today in YYYY-MM-DD in local timezone
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+  
+  const dateStr = searchParams?.date || todayStr;
+  const ket = searchParams?.ket || 'ALL';
 
-  const [transactions, stats] = await Promise.all([
-    getTransactions(month, year),
-    getAccountingDashboardStats(month, year)
-  ]);
+  const transactions = await getTransactions(dateStr, ket);
+  const stats = await getAccountingDashboardStats(dateStr, ket);
 
   return (
     <div className="h-full overflow-y-auto bg-slate-50">
       <TransactionsClient 
         initialTransactions={transactions}
         initialStats={stats}
-        currentMonth={month}
-        currentYear={year}
+        currentDate={dateStr}
+        currentKet={ket}
       />
     </div>
   );

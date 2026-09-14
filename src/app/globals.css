@@ -5,13 +5,6 @@
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -22,5 +15,50 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', Arial, Helvetica, sans-serif;
+}
+
+/* Tự động phóng to toàn bộ giao diện (chữ, padding, margin) trên màn hình lớn */
+html {
+  font-size: 16px; /* Kích thước chuẩn cho điện thoại/tablet */
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 18px; /* Laptop/Desktop thường - Đã tăng lên to rõ */
+  }
+}
+
+@media (min-width: 1536px) {
+  html {
+    font-size: 20px; /* Màn hình lớn (2K) - Phóng to thêm */
+  }
+}
+
+@media (min-width: 1920px) {
+  html {
+    font-size: 24px; /* Màn hình rất lớn (Full HD to, 4K) - Phóng to cực đại */
+  }
+}
+
+@media (min-width: 2560px) {
+  html {
+    font-size: 28px; /* Màn hình siêu lớn (Ultrawide, iMac) */
+  }
+}
+
+/* Scrollbar utilities */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+.scrollbar-thumb-slate-700::-webkit-scrollbar-thumb {
+  background-color: #334155;
+  border-radius: 4px;
+}
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }

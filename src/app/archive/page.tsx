@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FolderOpen, Search, User, Car } from "lucide-react";
+import { FolderOpen, Search, User, Car, Image as ImageIcon } from "lucide-react";
 import { getTeachers } from "@/actions/teachers";
 import { getCars } from "@/actions/cars";
 import TeacherDocsModal from "@/components/archive/TeacherDocsModal";
+import StaffDocsModal from "@/components/archive/StaffDocsModal";
 import CarDocsModal from "@/components/archive/CarDocsModal";
+import CarImagesModal from "@/components/archive/CarImagesModal";
 
 export default function ArchivePage() {
-  const [activeTab, setActiveTab] = useState<"teachers" | "cars">("teachers");
+  const [activeTab, setActiveTab] = useState<"teachers" | "staff" | "cars" | "car_images">("teachers");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryQuery, setCategoryQuery] = useState("all");
   const [docStatus, setDocStatus] = useState("all");
@@ -19,21 +21,65 @@ export default function ArchivePage() {
   const [loading, setLoading] = useState(true);
 
   const [selectedTeacher, setSelectedTeacher] = useState<any | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<any | null>(null);
   const [selectedCar, setSelectedCar] = useState<any | null>(null);
+  const [selectedCarImages, setSelectedCarImages] = useState<any | null>(null);
+
+  const [autoOpenModal, setAutoOpenModal] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     if (activeTab === "teachers") {
-      const data = await getTeachers(1, 100, searchQuery, categoryQuery, docStatus);
+      const data = await getTeachers(1, 100, searchQuery, categoryQuery, docStatus, "Đại Phát", "Giáo viên");
       setTeachers(data.data);
       setStats({ empty: data.emptyCount || 0, partial: data.partialCount || 0, full: data.fullCount || 0 });
+    } else if (activeTab === "staff") {
+      const data = await getTeachers(1, 100, searchQuery, categoryQuery, docStatus, "Đại Phát", "Nhân viên");
+      setTeachers(data.data);
+      setStats({ empty: data.emptyCount || 0, partial: data.partialCount || 0, full: data.fullCount || 0 });
+    } else if (activeTab === "cars") {
+      const data = await getCars(1, 100, searchQuery, categoryQuery, "", docStatus, "Đại Phát", "docs");
+      setCars(data.data);
+      setStats({ empty: data.emptyCount || 0, partial: data.partialCount || 0, full: data.fullCount || 0 });
     } else {
-      const data = await getCars(1, 100, searchQuery, categoryQuery, "", docStatus);
+      const data = await getCars(1, 100, searchQuery, categoryQuery, "", docStatus, "Đại Phát", "images");
       setCars(data.data);
       setStats({ empty: data.emptyCount || 0, partial: data.partialCount || 0, full: data.fullCount || 0 });
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (tab === "staff") setActiveTab("staff");
+      else if (tab === "teachers") setActiveTab("teachers");
+      else if (tab === "cars") setActiveTab("cars");
+      else if (tab === "car_images") setActiveTab("car_images");
+      
+      if (params.get("search")) setSearchQuery(params.get("search") || "");
+      if (params.get("action") === "upload") setAutoOpenModal(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (autoOpenModal && !loading) {
+      if (activeTab === "teachers" && teachers.length > 0) {
+        setSelectedTeacher(teachers[0]);
+        setAutoOpenModal(false);
+      } else if (activeTab === "staff" && teachers.length > 0) {
+        setSelectedStaff(teachers[0]);
+        setAutoOpenModal(false);
+      } else if (activeTab === "cars" && cars.length > 0) {
+        setSelectedCar(cars[0]);
+        setAutoOpenModal(false);
+      } else if (activeTab === "car_images" && cars.length > 0) {
+        setSelectedCarImages(cars[0]);
+        setAutoOpenModal(false);
+      }
+    }
+  }, [loading, teachers, cars, activeTab, autoOpenModal]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -44,7 +90,7 @@ export default function ArchivePage() {
   }, [activeTab, searchQuery, categoryQuery, docStatus]);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in zoom-in duration-500">
+    <div className="p-6 w-full space-y-6 animate-in fade-in zoom-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 opacity-60 pointer-events-none"></div>
         <div className="relative z-10">
@@ -75,6 +121,17 @@ export default function ArchivePage() {
             Hồ sơ Giáo viên
           </button>
           <button
+            onClick={() => { setActiveTab("staff"); setSearchQuery(""); setCategoryQuery("all"); }}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
+              activeTab === "staff"
+                ? "bg-white text-emerald-600 shadow-sm border border-slate-200/60"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            }`}
+          >
+            <User className="w-4 h-4" />
+            Hồ sơ Nhân viên
+          </button>
+          <button
             onClick={() => { setActiveTab("cars"); setSearchQuery(""); setCategoryQuery("all"); }}
             className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
               activeTab === "cars"
@@ -85,6 +142,17 @@ export default function ArchivePage() {
             <Car className="w-4 h-4" />
             Hồ sơ Phương tiện
           </button>
+          <button
+            onClick={() => { setActiveTab("car_images"); setSearchQuery(""); setCategoryQuery("all"); }}
+            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-300 ${
+              activeTab === "car_images"
+                ? "bg-white text-emerald-600 shadow-sm border border-slate-200/60"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            }`}
+          >
+            <ImageIcon className="w-4 h-4" />
+            Hình ảnh Phương tiện
+          </button>
         </div>
 
         {/* Content */}
@@ -94,7 +162,7 @@ export default function ArchivePage() {
               <Search className="w-5 h-5 text-slate-400 ml-2" />
               <input
                 type="text"
-                placeholder={activeTab === "teachers" ? "Tìm tên giáo viên, CCCD..." : "Tìm biển số xe, tên chủ xe..."}
+                placeholder={(activeTab === "teachers" || activeTab === "staff") ? "Tìm tên, CCCD..." : "Tìm biển số xe, tên chủ xe..."}
                 className="bg-transparent border-none outline-none text-sm w-full font-medium text-slate-700 placeholder:text-slate-400 py-1"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -106,7 +174,7 @@ export default function ArchivePage() {
               className="w-full md:w-auto px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="all">Tất cả hạng</option>
-              {activeTab === "teachers" ? (
+              {(activeTab === "teachers" || activeTab === "staff") ? (
                 <>
                   <option value="GVLT">GV Lý thuyết (GVLT)</option>
                   <option value="B">Hạng B</option>
@@ -166,13 +234,18 @@ export default function ArchivePage() {
                 <div key={i} className="h-24 bg-slate-100 rounded-xl"></div>
               ))}
             </div>
-          ) : activeTab === "teachers" ? (
+          ) : (activeTab === "teachers" || activeTab === "staff") ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {teachers.map((teacher) => (
                 <div 
                   key={teacher.Id} 
-                  onClick={() => setSelectedTeacher(teacher)}
-                  className="p-4 rounded-xl border border-slate-200 hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer bg-white group"
+                  onClick={() => activeTab === 'staff' ? setSelectedStaff(teacher) : setSelectedTeacher(teacher)}
+                  className={`p-4 rounded-xl border hover:shadow-md transition-all cursor-pointer group ${
+                    (activeTab === 'staff' && (teacher.UploadedDocs || 0) >= 4) ||
+                    (activeTab === 'teachers' && (teacher.UploadedDocs || 0) >= 9)
+                      ? 'bg-emerald-50 border-emerald-300 hover:border-emerald-500 shadow-sm shadow-emerald-100' 
+                      : 'bg-white border-slate-200 hover:border-indigo-400'
+                  }`}
                 >
                   <div className="flex items-center gap-4">
                     {teacher.Avatar ? (
@@ -185,15 +258,15 @@ export default function ArchivePage() {
                     <div className="flex-1">
                       <div className="flex justify-between items-start">
                         <h3 className="font-bold text-slate-800">{teacher.HoTen}</h3>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          (teacher.UploadedDocs || 0) === 8 ? 'bg-green-100 text-green-700' : 
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                          (activeTab === 'staff' && (teacher.UploadedDocs || 0) === 4) || (activeTab === 'teachers' && (teacher.UploadedDocs || 0) === 9) ? 'bg-green-100 text-green-700' : 
                           (teacher.UploadedDocs || 0) > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
                         }`}>
-                          {teacher.UploadedDocs || 0}/8 mục
+                          {teacher.UploadedDocs || 0}/{activeTab === 'staff' ? 4 : 9} mục
                         </span>
                       </div>
                       <p className="text-xs font-medium text-slate-500 mt-0.5">CCCD: {teacher.CCCD || "Trống"}</p>
-                      <div className="mt-2 text-[10px] font-bold px-2 py-1 bg-slate-100 text-slate-600 rounded inline-block">
+                      <div className="mt-2 text-xs font-bold px-2 py-1 bg-slate-100 text-slate-600 rounded inline-block">
                         {teacher.HangGVTH ? `GVTH: ${teacher.HangGVTH}` : "Chưa phân loại"}
                       </div>
                     </div>
@@ -201,7 +274,7 @@ export default function ArchivePage() {
                 </div>
               ))}
               {teachers.length === 0 && (
-                <div className="col-span-full py-12 text-center text-slate-500">Không tìm thấy giáo viên nào.</div>
+                <div className="col-span-full py-12 text-center text-slate-500">Không tìm thấy nhân sự nào.</div>
               )}
             </div>
           ) : (
@@ -209,8 +282,13 @@ export default function ArchivePage() {
               {cars.map((car) => (
                 <div 
                   key={car.Id} 
-                  onClick={() => setSelectedCar(car)}
-                  className="p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer bg-white group"
+                  onClick={() => activeTab === "car_images" ? setSelectedCarImages(car) : setSelectedCar(car)}
+                  className={`p-4 rounded-xl border hover:shadow-md transition-all cursor-pointer group ${
+                    (activeTab === "car_images" && (car.UploadedImages || 0) >= 5) || 
+                    (activeTab === "cars" && (car.UploadedDocs || 0) >= 6)
+                      ? 'bg-emerald-50 border-emerald-300 hover:border-emerald-500 shadow-sm shadow-emerald-100' 
+                      : 'bg-white border-slate-200 hover:border-blue-400'
+                  }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className="p-3 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700 group-hover:scale-110 transition-transform">
@@ -219,15 +297,24 @@ export default function ArchivePage() {
                     <div className="flex-1">
                       <div className="flex justify-between items-start">
                         <h3 className="font-black text-slate-800 text-lg tracking-wide leading-none">{car.BienSo}</h3>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          (car.UploadedDocs || 0) === 6 ? 'bg-green-100 text-green-700' : 
-                          (car.UploadedDocs || 0) > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
-                        }`}>
-                          {car.UploadedDocs || 0}/6 mục
-                        </span>
+                        {activeTab === "car_images" ? (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                            (car.UploadedImages || 0) === 5 ? 'bg-green-100 text-green-700' : 
+                            (car.UploadedImages || 0) > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {car.UploadedImages || 0}/5 hình
+                          </span>
+                        ) : (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                            (car.UploadedDocs || 0) === 6 ? 'bg-green-100 text-green-700' : 
+                            (car.UploadedDocs || 0) > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {car.UploadedDocs || 0}/6 mục
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs font-medium text-slate-500 mt-1.5">Chủ xe: {car.ChuXe || "Trung tâm"}</p>
-                      <div className="mt-2 text-[10px] font-bold px-2 py-1 bg-slate-100 text-slate-600 rounded inline-block">
+                      <div className="mt-2 text-xs font-bold px-2 py-1 bg-slate-100 text-slate-600 rounded inline-block">
                         {car.HangXe || "Chưa phân loại"}
                       </div>
                     </div>
@@ -249,10 +336,24 @@ export default function ArchivePage() {
         onUpdate={loadData}
       />
 
+      <StaffDocsModal 
+        isOpen={!!selectedStaff} 
+        onClose={() => setSelectedStaff(null)} 
+        staff={selectedStaff}
+        onUpdate={loadData}
+      />
+
       <CarDocsModal 
         isOpen={!!selectedCar} 
         onClose={() => setSelectedCar(null)} 
         car={selectedCar}
+        onUpdate={loadData}
+      />
+
+      <CarImagesModal 
+        isOpen={!!selectedCarImages} 
+        onClose={() => setSelectedCarImages(null)} 
+        car={selectedCarImages}
         onUpdate={loadData}
       />
     </div>

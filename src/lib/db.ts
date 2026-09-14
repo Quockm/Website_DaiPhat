@@ -30,15 +30,20 @@ export async function getDbConnection(dbName: string): Promise<sql.ConnectionPoo
     };
     
     const pool = new sql.ConnectionPool(poolConfig);
-    const close = pool.close.bind(pool);
-    
-    // Auto-remove from map on close
-    // @ts-ignore
-    pool.close = (...args: any[]) => {
+    const originalClose = pool.close.bind(pool);
+
+    // Prevent unhandled background connection errors from crashing the process
+    pool.on('error', (err) => {
+      console.error(`[db] Connection pool error (${dbName}):`, err);
       pools.delete(dbName);
-      return (close as any)(...args);
-    };
-    
+    });
+
+    // Auto-remove from map on close
+    pool.close = (() => {
+      pools.delete(dbName);
+      return originalClose();
+    }) as typeof pool.close;
+
     await pool.connect();
     pools.set(dbName, pool);
   }

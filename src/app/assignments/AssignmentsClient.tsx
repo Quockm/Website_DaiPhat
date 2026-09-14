@@ -247,10 +247,10 @@ export default function AssignmentsClient({
                           <span className="text-xs font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{gv.type}</span>
                         </div>
                         {isAssignedElsewhere && !isChecked && (
-                           <div className="text-[10px] font-semibold text-amber-600 mt-1">Đang dạy: {gv.khoas.join(', ')}</div>
+                           <div className="text-xs font-semibold text-amber-600 mt-1">Đang dạy: {gv.khoas.join(', ')}</div>
                         )}
                         {isChecked && (
-                           <div className="text-[10px] font-bold text-indigo-600 mt-1">Sẽ dạy: {[...new Set([...gv.khoas, selectedCourse?.id])].filter(Boolean).join(', ')}</div>
+                           <div className="text-xs font-bold text-indigo-600 mt-1">Sẽ dạy: {[...new Set([...gv.khoas, selectedCourse?.id])].filter(Boolean).join(', ')}</div>
                         )}
                       </div>
                     </label>
@@ -293,10 +293,10 @@ export default function AssignmentsClient({
                           <span className="text-xs font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{xe.type}</span>
                         </div>
                         {isAssignedElsewhere && !isChecked && (
-                           <div className="text-[10px] font-semibold text-amber-600 mt-1">Đang gắn: {xe.khoas.join(', ')}</div>
+                           <div className="text-xs font-semibold text-amber-600 mt-1">Đang gắn: {xe.khoas.join(', ')}</div>
                         )}
                         {isChecked && (
-                           <div className="text-[10px] font-bold text-orange-600 mt-1">Sẽ gắn: {[...new Set([...xe.khoas, selectedCourse?.id])].filter(Boolean).join(', ')}</div>
+                           <div className="text-xs font-bold text-orange-600 mt-1">Sẽ gắn: {[...new Set([...xe.khoas, selectedCourse?.id])].filter(Boolean).join(', ')}</div>
                         )}
                       </div>
                     </label>

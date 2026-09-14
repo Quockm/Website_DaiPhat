@@ -28,6 +28,7 @@ export function TransactionForm({
   const [chungTu, setChungTu] = useState("");
   const [ghiChu, setGhiChu] = useState("");
   const [maKhoa, setMaKhoa] = useState("");
+  const [ket, setKet] = useState("Trang");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,10 +36,15 @@ export function TransactionForm({
       alert("Vui lòng nhập danh mục và số tiền!");
       return;
     }
-    
-    setLoading(true);
+
     const amount = parseFloat(soTien.replace(/,/g, ''));
-    
+    if (isNaN(amount) || amount <= 0) {
+      alert("Số tiền không hợp lệ!");
+      return;
+    }
+
+    setLoading(true);
+
     const res = await createTransaction({
       loaiGD,
       ngayGD,
@@ -48,7 +54,8 @@ export function TransactionForm({
       hinhThuc,
       chungTu,
       ghiChu,
-      maKhoa
+      maKhoa,
+      ket
     });
     
     setLoading(false);
@@ -62,6 +69,7 @@ export function TransactionForm({
       setChungTu("");
       setGhiChu("");
       setMaKhoa("");
+      setKet("Trang");
     } else {
       alert("Có lỗi xảy ra: " + res.error);
     }
@@ -87,14 +95,14 @@ export function TransactionForm({
                 <button
                   type="button"
                   className={`flex-1 py-1.5 text-sm font-medium rounded ${loaiGD === 'THU' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  onClick={() => setLoaiGD('THU')}
+                  onClick={() => { setLoaiGD('THU'); setDanhMuc(''); }}
                 >
                   Phiếu Thu
                 </button>
                 <button
                   type="button"
                   className={`flex-1 py-1.5 text-sm font-medium rounded ${loaiGD === 'CHI' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  onClick={() => setLoaiGD('CHI')}
+                  onClick={() => { setLoaiGD('CHI'); setDanhMuc(''); }}
                 >
                   Phiếu Chi
                 </button>
@@ -102,18 +110,57 @@ export function TransactionForm({
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Ngày giao dịch *</label>
-              <Input type="date" required value={ngayGD} onChange={e => setNgayGD(e.target.value)} />
+              <Input type="date" required value={ngayGD} onChange={e => setNgayGD(e.target.value)} className="text-black" />
             </div>
           </div>
           
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Danh mục *</label>
             <Input 
-              placeholder={loaiGD === 'THU' ? "VD: Thu học phí, Thu lệ phí thi..." : "VD: Tiền điện, Lương GV, Thuê sân bãi..."}
+              list="danhMucList"
+              placeholder="Tìm hoặc chọn danh mục..."
               value={danhMuc} 
               onChange={e => setDanhMuc(e.target.value)} 
               required
+              className="text-black"
             />
+            <datalist id="danhMucList">
+              {loaiGD === 'THU' ? (
+                <>
+                  <option value="Ô tô Đại Phát" />
+                  <option value="Ô tô Tiến Thành" />
+                  <option value="Xe máy Đại Phát" />
+                  <option value="Tốt nghiệp" />
+                  <option value="Khác" />
+                  <option value="Xe" />
+                  <option value="Ô tô ĐP + TT" />
+                  <option value="Mua xe" />
+                  <option value="Cabin" />
+                </>
+              ) : (
+                <>
+                  <option value="Cơ sở vật chất" />
+                  <option value="Văn phòng phẩm" />
+                  <option value="Hệ thống thông tin" />
+                  <option value="Ăn uống" />
+                  <option value="Báo cáo" />
+                  <option value="Hỗ trợ nhân viên" />
+                  <option value="Xăng, xe" />
+                  <option value="Điện, nước, Internet" />
+                  <option value="Lương, thưởng" />
+                  <option value="Rác" />
+                  <option value="Ship, grab" />
+                  <option value="Khác" />
+                  <option value="Gia đình" />
+                  <option value="Thuê CSVC" />
+                  <option value="Tiến Thành" />
+                  <option value="Từ thiện" />
+                  <option value="Abc" />
+                  <option value="Nợ" />
+                  <option value="Thuế, bảo hiểm" />
+                </>
+              )}
+            </datalist>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -122,15 +169,16 @@ export function TransactionForm({
               <Input 
                 placeholder="0" 
                 value={soTien} 
-                onChange={e => setSoTien(formatAmount(e.target.value))} 
+                onChange={e => setSoTien(e.target.value)} 
+                onBlur={() => setSoTien(formatAmount(soTien))}
                 required
-                className="font-semibold text-right"
+                className="font-semibold text-right text-black"
               />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Hình thức thanh toán</label>
               <Select value={hinhThuc} onValueChange={setHinhThuc}>
-                <SelectTrigger>
+                <SelectTrigger className="text-black">
                   <SelectValue placeholder="Chọn hình thức" />
                 </SelectTrigger>
                 <SelectContent>
@@ -143,32 +191,30 @@ export function TransactionForm({
           </div>
 
           <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Thuộc Két *</label>
+            <Select value={ket} onValueChange={setKet}>
+              <SelectTrigger className="text-black">
+                <SelectValue placeholder="Chọn két" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Trang">Trang</SelectItem>
+                <SelectItem value="Mẹ">Mẹ</SelectItem>
+                <SelectItem value="Chưa phân bổ">Chưa phân bổ</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Người nộp / Người nhận</label>
             <Input 
               placeholder={loaiGD === 'THU' ? "Tên người nộp tiền" : "Tên người nhận tiền"}
               value={nguoiNhanNop} 
               onChange={e => setNguoiNhanNop(e.target.value)} 
+              className="text-black"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Mã Khóa (Nếu có)</label>
-              <Input 
-                placeholder="VD: 79106K26B00XX"
-                value={maKhoa} 
-                onChange={e => setMaKhoa(e.target.value)} 
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Số chứng từ</label>
-              <Input 
-                placeholder="Mã hóa đơn/UNC"
-                value={chungTu} 
-                onChange={e => setChungTu(e.target.value)} 
-              />
-            </div>
-          </div>
+
 
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">Ghi chú thêm</label>
@@ -176,6 +222,7 @@ export function TransactionForm({
               placeholder="Nhập diễn giải..."
               value={ghiChu} 
               onChange={e => setGhiChu(e.target.value)} 
+              className="text-black"
             />
           </div>
 

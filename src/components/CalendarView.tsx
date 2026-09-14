@@ -1,7 +1,9 @@
 "use client";
+import React from "react";
 
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Maximize, Minimize, Activity } from "lucide-react";
+import { getCurrentCapacity } from "@/actions/courses";
 
 type Course = {
   id: string;
@@ -20,9 +22,24 @@ type Course = {
   dat?: { bd: string; kt: string };
 };
 
-export default function CalendarView({ initialCourses }: { initialCourses: Course[] }) {
+export default function CalendarView({ initialCourses, initialSchedules = [], initialDats = [] }: { initialCourses: Course[], initialSchedules?: any[], initialDats?: any[] }) {
   const [viewDate, setViewDate] = useState(new Date());
-  const [selectedEvent, setSelectedEvent] = useState<{ course: Course, phase: string } | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<{ course?: Course, schedule?: any, phase: string } | null>(null);
+  
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentCapacity, setCurrentCapacity] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const maxCapacity = 1000;
+  
+  useEffect(() => {
+    getCurrentCapacity('Đại Phát').then(setCurrentCapacity);
+    
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
   
   const currentMonth = viewDate.getMonth();
   const currentYear = viewDate.getFullYear();
@@ -31,12 +48,22 @@ export default function CalendarView({ initialCourses }: { initialCourses: Cours
   const handleNextMonth = () => setViewDate(new Date(currentYear, currentMonth + 1, 1));
   const handleToday = () => setViewDate(new Date());
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   // Calendar logic
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay(); // 0 = Sunday
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
   const today = new Date();
   
-  const parseDate = (dateStr: string) => {
+  const parseDate = (dateStr: string | undefined) => {
     if (!dateStr || dateStr === '-') return null;
     const normalized = dateStr.replace(/-/g, '/');
     const parts = normalized.split('/');
@@ -66,8 +93,47 @@ export default function CalendarView({ initialCourses }: { initialCourses: Cours
 
   const getEventsForDay = (day: number) => {
     const currentLoopDate = new Date(currentYear, currentMonth, day).getTime();
-    let events: { course: Course; phase: string; color: string; statusText?: string }[] = [];
+    let events: { course?: Course; schedule?: any; phase: string; color: string; statusText?: string }[] = [];
 
+    // Process standalone exam schedules
+    initialSchedules.forEach(sc => {
+      const examTime = parseDate(sc.exam_date)?.getTime();
+      if (examTime === currentLoopDate) {
+        if (sc.type === 'KT_XE') {
+          events.push({
+            schedule: sc,
+            phase: sc.title || 'Lịch Kiểm Tra Xe',
+            color: 'bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-300 ring-offset-1',
+            statusText: 'KIỂM TRA XE'
+          });
+        } else {
+          const isTN = sc.type === 'TN';
+          events.push({
+            schedule: sc,
+            phase: sc.title || (isTN ? 'Kỳ thi Tốt Nghiệp' : 'Kỳ thi Sát Hạch'),
+            color: isTN 
+              ? 'bg-indigo-600 text-white border-indigo-700 shadow-md ring-2 ring-indigo-400 ring-offset-1' 
+              : 'bg-rose-600 text-white border-rose-700 shadow-md ring-2 ring-rose-400 ring-offset-1',
+            statusText: isTN ? 'LỊCH THI TN' : 'LỊCH THI SH'
+          });
+        }
+      }
+    });
+
+    // Process DAT schedules
+    initialDats.forEach(dat => {
+      const datTime = parseDate(dat.NgayNhan)?.getTime();
+      if (datTime === currentLoopDate) {
+        events.push({
+          schedule: { id: `dat-${dat.Id}`, type: 'DAT', title: `Bàn giao DAT (${dat.SoLuong})` },
+          phase: `Bàn giao DAT (${dat.SoLuong})`,
+          color: 'bg-teal-500 text-white border-teal-600 shadow-md ring-2 ring-teal-300 ring-offset-1',
+          statusText: dat.NguoiNhan ? `Giao cho: ${dat.NguoiNhan}` : 'Nhận DAT'
+        });
+      }
+    });
+
+    // Process course milestones
     initialCourses.forEach(course => {
       const kg = parseDate(course.khaiGiang)?.getTime();
       const bg = parseDate(course.beGiang)?.getTime();
@@ -89,9 +155,11 @@ export default function CalendarView({ initialCourses }: { initialCourses: Cours
         }
       }
 
-      if (thi === currentLoopDate) {
-        dayPhases.push({ text: 'Sát hạch', type: 'thi' });
-      }
+      // Không hiển thị lịch sát hạch từ thông tin khóa học ở đây nữa
+      // (chỉ hiển thị từ initialSchedules)
+      // if (thi === currentLoopDate) {
+      //   dayPhases.push({ text: 'Sát hạch', type: 'thi' });
+      // }
 
       if (tn === currentLoopDate) {
         dayPhases.push({ text: 'Tốt nghiệp', type: 'tn' });
@@ -158,7 +226,7 @@ export default function CalendarView({ initialCourses }: { initialCourses: Cours
   };
 
   const daysOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-  const gridCells = [];
+  const gridCells: React.ReactElement[] = [];
   
   // Empty cells for days before the 1st
   for (let i = 0; i < firstDayOfMonth; i++) {
@@ -173,7 +241,7 @@ export default function CalendarView({ initialCourses }: { initialCourses: Cours
     gridCells.push(
       <div key={`day-${d}`} className={`min-h-[140px] border p-1 flex flex-col relative ${isToday ? 'bg-red-50/50 border-red-500 shadow-[inset_0_0_10px_rgba(239,68,68,0.2)] z-10' : 'bg-white border-slate-200'}`}>
         <div className={`text-right text-sm font-bold p-1 ${isToday ? 'text-red-600 flex justify-between items-center' : 'text-slate-600'}`}>
-          {isToday && <span className="text-[10px] uppercase tracking-wider text-red-600 font-black ml-1 bg-red-100 px-2 py-0.5 rounded border border-red-200">Hôm nay</span>}
+          {isToday && <span className="text-xs uppercase tracking-wider text-red-600 font-black ml-1 bg-red-100 px-2 py-0.5 rounded border border-red-200">Hôm nay</span>}
           <span className={isToday ? "bg-red-600 text-white rounded-full w-8 h-8 inline-flex items-center justify-center text-base shadow-sm" : ""}>
             {d}
           </span>
@@ -185,17 +253,24 @@ export default function CalendarView({ initialCourses }: { initialCourses: Cours
 
             return (
             <div 
-              key={`${evt.course.id}-${evt.phase}-${idx}`} 
-              onClick={() => setSelectedEvent(evt)}
-              className={`relative p-1.5 rounded cursor-pointer transition-all ${evt.color} flex flex-col gap-1 border border-black/10`}
-              title={`Nhấp để xem chi tiết Khóa ${evt.course.id}`}
+              key={evt.schedule ? `sched-${evt.schedule.id}-${idx}` : `${evt.course?.id}-${evt.phase}-${idx}`} 
+              onClick={() => { if(evt.course || evt.schedule) setSelectedEvent({course: evt.course, schedule: evt.schedule, phase: evt.phase}) }}
+              className={`relative p-1.5 rounded ${evt.course || evt.schedule ? 'cursor-pointer' : 'cursor-default'} transition-all ${evt.color} flex flex-col gap-1 border ${evt.schedule ? 'border-transparent' : 'border-black/10'}`}
+              title={evt.course ? `Nhấp để xem chi tiết Khóa ${evt.course.id}` : evt.phase}
             >
               <div className="flex items-center gap-1.5 relative z-10">
-                <span className="bg-white/90 text-slate-900 px-1 py-0.5 rounded text-[10px] font-black uppercase shrink-0 min-w-[28px] text-center border border-black/10">
-                  {evt.course.hangXe || evt.course.type}
-                </span>
-                <span className="truncate font-bold text-[11px] text-slate-900 flex-1">
-                  {evt.course.id}
+                {evt.course && (
+                  <span className="bg-white/90 text-slate-900 px-1 py-0.5 rounded text-xs font-black uppercase shrink-0 min-w-[28px] text-center border border-black/10">
+                    {evt.course.hangXe || evt.course.type}
+                  </span>
+                )}
+                {evt.schedule && (
+                  <span className="bg-white/20 text-white px-1 py-0.5 rounded text-xs font-black uppercase shrink-0 min-w-[28px] text-center border border-white/30">
+                    {evt.schedule.type}
+                  </span>
+                )}
+                <span className={`truncate font-bold text-xs flex-1 ${evt.schedule ? 'text-white' : 'text-slate-900'}`}>
+                  {evt.course ? evt.course.id : evt.schedule.title}
                 </span>
                 {evt.statusText === 'Khai giảng' && (
                   <span className="relative flex h-2 w-2 ml-auto shrink-0 mt-0.5">
@@ -211,14 +286,14 @@ export default function CalendarView({ initialCourses }: { initialCourses: Cours
                 )}
               </div>
               <div className="flex flex-col mt-0.5 relative z-10">
-                {!isMilestoneOnly && evt.phase && (
-                  <span className={`text-[10px] font-bold text-slate-800`}>
+                {!isMilestoneOnly && evt.phase && !evt.schedule && (
+                  <span className={`text-xs font-bold ${evt.schedule ? 'text-white' : 'text-slate-800'}`}>
                     {evt.phase}
                   </span>
                 )}
                 {evt.statusText && (
-                  <span className={`text-[10px] font-bold text-slate-800 opacity-90 truncate bg-white/40 px-1 rounded inline-block w-fit mt-0.5`}>
-                    - {evt.statusText}
+                  <span className={`text-xs font-bold ${evt.schedule ? 'text-white bg-white/20' : 'text-slate-800 bg-white/40'} opacity-90 truncate px-1 rounded inline-block w-fit mt-0.5`}>
+                    {evt.schedule ? '' : '- '} {evt.statusText}
                   </span>
                 )}
               </div>
@@ -237,18 +312,40 @@ export default function CalendarView({ initialCourses }: { initialCourses: Cours
   }
 
   return (
-    <div className="space-y-6">
+    <div ref={containerRef} className={`space-y-6 ${isFullscreen ? 'p-6 bg-slate-50 h-screen overflow-y-auto' : ''}`}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Lịch biểu Đào tạo</h1>
           <p className="text-slate-600 mt-2 text-base font-medium">Theo dõi tiến trình các khóa học theo từng ngày trong tháng.</p>
         </div>
-        <div className="flex items-center gap-4 bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
-          <button onClick={handlePrevMonth} className="px-3 py-1.5 rounded hover:bg-slate-100 text-slate-600 font-bold transition-colors">&larr;</button>
-          <span className="cursor-pointer hover:underline font-bold text-slate-800 text-lg w-32 text-center" onClick={handleToday}>
-            Tháng {currentMonth + 1}/{currentYear}
-          </span>
-          <button onClick={handleNextMonth} className="px-3 py-1.5 rounded hover:bg-slate-100 text-slate-600 font-bold transition-colors">&rarr;</button>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
+          <div className="flex items-center gap-3 bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-100 w-full sm:w-auto">
+            <Activity className="h-5 w-5 text-indigo-600 shrink-0" />
+            <div>
+              <div className="text-xs font-medium text-slate-500 uppercase tracking-wider">Lưu lượng</div>
+              <div className="text-base font-bold text-indigo-900">
+                {currentCapacity} <span className="text-xs font-normal text-slate-500">/ {maxCapacity}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center justify-between sm:justify-center gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm flex-1 sm:flex-none">
+              <button onClick={handlePrevMonth} className="px-3 py-1.5 rounded hover:bg-slate-100 text-slate-600 font-bold transition-colors">&larr;</button>
+              <span className="cursor-pointer hover:underline font-bold text-slate-800 text-lg w-32 text-center" onClick={handleToday}>
+                Tháng {currentMonth + 1}/{currentYear}
+              </span>
+              <button onClick={handleNextMonth} className="px-3 py-1.5 rounded hover:bg-slate-100 text-slate-600 font-bold transition-colors">&rarr;</button>
+            </div>
+            
+            <button 
+              onClick={toggleFullscreen}
+              className="p-2.5 bg-white rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-700 transition-colors shrink-0"
+              title="Toàn màn hình"
+            >
+              {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -315,30 +412,54 @@ export default function CalendarView({ initialCourses }: { initialCourses: Cours
             
             <div className="p-6 space-y-4">
               <div className="flex items-center gap-3">
-                <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-md font-bold text-sm border border-indigo-200">
-                  {selectedEvent.course.hangXe || selectedEvent.course.type}
+                <span className={`px-3 py-1 rounded-md font-bold text-sm border ${selectedEvent.course ? 'bg-indigo-100 text-indigo-800 border-indigo-200' : 'bg-rose-100 text-rose-800 border-rose-200'}`}>
+                  {selectedEvent.course ? (selectedEvent.course.hangXe || selectedEvent.course.type) : (selectedEvent.schedule?.type || 'LỊCH')}
                 </span>
-                <h4 className="text-xl font-extrabold text-slate-800">{selectedEvent.course.id}</h4>
+                <h4 className="text-xl font-extrabold text-slate-800">
+                  {selectedEvent.course ? selectedEvent.course.id : selectedEvent.schedule?.title}
+                </h4>
               </div>
               
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
                 <div className="flex justify-between items-center border-b border-slate-200 pb-2">
                   <span className="text-slate-500 font-medium text-sm">Sự kiện trên lịch:</span>
-                  <span className="font-bold text-slate-800">{selectedEvent.phase}</span>
+                  <span className="font-bold text-slate-800 text-right">{selectedEvent.phase}</span>
                 </div>
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                  <span className="text-slate-500 font-medium text-sm">Trạng thái hiện tại:</span>
-                  <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{selectedEvent.course.status}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500 font-medium text-sm">Số lượng Học viên:</span>
-                  <span className="font-bold text-slate-800">{selectedEvent.course.hv} học viên</span>
-                </div>
-                {selectedEvent.course.type === 'OTO' && (
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-                    <span className="text-slate-500 font-medium text-sm">Số lượng Xe phân bổ:</span>
-                    <span className="font-bold text-slate-800">{selectedEvent.course.xe} xe</span>
-                  </div>
+                
+                {selectedEvent.course && (
+                  <>
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                      <span className="text-slate-500 font-medium text-sm">Trạng thái hiện tại:</span>
+                      <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{selectedEvent.course.status}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-medium text-sm">Số lượng Học viên:</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.course.hv} học viên</span>
+                    </div>
+                    {selectedEvent.course.type === 'OTO' && (
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                        <span className="text-slate-500 font-medium text-sm">Số lượng Xe phân bổ:</span>
+                        <span className="font-bold text-slate-800">{selectedEvent.course.xe} xe</span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {selectedEvent.schedule && !selectedEvent.course && (
+                  <>
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                      <span className="text-slate-500 font-medium text-sm">Sân Thi:</span>
+                      <span className="font-bold text-indigo-700">{selectedEvent.schedule.location || 'Chưa cập nhật'}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                      <span className="text-slate-500 font-medium text-sm">Số lượng HV dự kiến:</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.schedule.student_count ? `${selectedEvent.schedule.student_count} học viên` : 'Chưa cập nhật'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-medium text-sm">Loại lịch:</span>
+                      <span className="font-bold text-slate-800">{selectedEvent.schedule.type === 'DAT' ? 'Bàn giao DAT' : 'Lịch Thi'}</span>
+                    </div>
+                  </>
                 )}
               </div>
               

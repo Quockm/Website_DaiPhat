@@ -2,27 +2,46 @@
 
 import { revalidatePath } from 'next/cache';
 import sql from 'mssql';
+import { getDbConnection } from '@/lib/db';
 import { getConfigRates } from './courses';
+import { getFeeNorms } from './settings';
 
-const serverParts = (process.env.SQL_SERVER_NAME || "").split(",");
-const dbConfig = {
-  user: process.env.SQL_USERNAME,
-  password: process.env.SQL_PASSWORD,
-  server: serverParts[0] || "",
-  port: serverParts.length > 1 ? parseInt(serverParts[1]) : 1433,
-  database: process.env.SQL_DATABASE || "dp_system",
-  options: { encrypt: false, trustServerCertificate: true }
-};
+export interface AdmissionStudent {
+  stt: number;
+  name: string;
+  dob: string;
+  phone: string;
+  cccd: string;
+  teacher: string;
+  ngayNop: string;
+  hocPhi: number;
+  mucPhi: number;
+  thieu: number;
+  hinhThuc: string;
+  ghiChu: string;
+}
+
+export interface AdmissionCourse {
+  name: string;
+  category: string;
+  students: AdmissionStudent[];
+}
+
+export async function getAdmissionsData(): Promise<AdmissionCourse[]> {
+  // Dummy data to satisfy AdmissionsClient which relies on it
+  return [];
+}
+
 
 export async function getCoursesForAdmissions(type: 'MOTO' | 'OTO') {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     const result = await pool.request().query(`
       SELECT 
-        k.MaKhoa as id,
-        ISNULL(a.TenKhoa, k.MaKhoa) as name,
+        a.MaKhoa as id,
+        ISNULL(a.TenKhoa, a.MaKhoa) as name,
         a.Hang as hangXe,
-        (SELECT COUNT(*) FROM App_HocVien_V2 h WHERE h.MaKhoa = k.MaKhoa) as soHocVienDaNhap,
+        (SELECT COUNT(*) FROM App_HocVien_V2 h WHERE h.MaKhoa = a.MaKhoa) as soHocVienDaNhap,
         ISNULL(a.LuuLuong, 0) as luuLuong,
         k.NgayHoc as khaiGiang,
         k.NgayKt as beGiang,
@@ -32,13 +51,12 @@ export async function getCoursesForAdmissions(type: 'MOTO' | 'OTO') {
           ELSE 'OTO'
         END as type,
         ISNULL(a.TrungTam, N'Đại Phát') as trungTam
-      FROM App_DieuChinh_Khoa k
-      LEFT JOIN App_Khoa a ON k.MaKhoa = a.MaKhoa
-      ORDER BY k.NgayHoc DESC
+      FROM App_Khoa a
+      LEFT JOIN App_DieuChinh_Khoa k ON a.MaKhoa = k.MaKhoa
+      ORDER BY a.MaKhoa DESC
     `);
-    pool.close();
+    // pool.close(); // Managed by db.ts
     
-    // Only return courses where soHocVienDaNhap < luuLuong, matches type, and not completed
     const today = new Date().setHours(0,0,0,0);
     
     const parseDate = (dateStr: string) => {
@@ -61,7 +79,12 @@ export async function getCoursesForAdmissions(type: 'MOTO' | 'OTO') {
     return result.recordset
       .filter(r => {
         if (r.type !== type) return false;
-        if ((r.soHocVienDaNhap || 0) >= (r.luuLuong || 1)) return false;
+        
+        // Exclude courses that are not approved yet or are finished
+        if (r.status === 'Mới tạo' || r.status === 'Chờ duyệt' || r.status === 'Đã bế giảng' || r.status === 'Đã sát hạch') return false;
+        
+        // Exclude if full (only if luuLuong is properly set)
+        if (r.luuLuong > 0 && (r.soHocVienDaNhap || 0) >= r.luuLuong) return false;
         
         // Filter out completed courses (beGiang is in the past)
         const bgDate = parseDate(r.beGiang)?.getTime();
@@ -87,42 +110,40 @@ export async function getCoursesForAdmissions(type: 'MOTO' | 'OTO') {
 
 export async function getCourseDetailsForAdmissions(maKhoa: string) {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     
-    // Get students
-    const studentsRes = await pool.request()
-      .input('MaKhoa', sql.NVarChar, maKhoa)
-      .query(`
-        SELECT MaDK as Id, HoTen, NgaySinh, CCCD, SDT as SoDienThoai, NgayNhap, GiaoVien, NguoiNop, TienThu, HinhThucThu
-        FROM App_HocVien_V2
-        WHERE MaKhoa = @MaKhoa
-        ORDER BY NgayNhap DESC
-      `);
-      
-    // Get teachers
-    const teachersRes = await pool.request()
-      .input('MaKhoa', sql.NVarChar, maKhoa)
-      .query(`
-        SELECT pg.MaGV as id, g.HoTen as name
-        FROM App_PhanCong_GV pg
-        JOIN App_GiaoVien g ON pg.MaGV = CAST(g.Id AS NVARCHAR)
-        WHERE pg.MaKhoa = @MaKhoa
-      `);
-      
-    // Get cars
-    const carsRes = await pool.request()
-      .input('MaKhoa', sql.NVarChar, maKhoa)
-      .query(`
-        SELECT px.BienSoXe as bienSo, x.ChuXe as chuXe
-        FROM App_PhanCong_Xe px
-        JOIN App_PhuongTien x ON px.BienSoXe = x.BienSo
-        WHERE px.MaKhoa = @MaKhoa
-      `);
-      
-    pool.close();
-    
-    const rates = await getConfigRates();
-    
+    // Get students, teachers, cars, rates and fee norms in parallel (independent queries)
+    const [studentsRes, teachersRes, carsRes, rates, feeNorms] = await Promise.all([
+      pool.request()
+        .input('MaKhoa', sql.NVarChar, maKhoa)
+        .query(`
+          SELECT MaDK as Id, HoTen, NgaySinh, CCCD, SDT as SoDienThoai, NgayNhap, GiaoVien, NguoiNop, TienThu, HinhThucThu, DaNop, ConNo
+          FROM App_HocVien_V2
+          WHERE MaKhoa = @MaKhoa
+          ORDER BY NgayNhap DESC
+        `),
+      pool.request()
+        .input('MaKhoa', sql.NVarChar, maKhoa)
+        .query(`
+          SELECT pg.MaGV as id, g.HoTen as name
+          FROM App_PhanCong_GV pg
+          JOIN App_GiaoVien g ON pg.MaGV = CAST(g.Id AS NVARCHAR)
+          WHERE pg.MaKhoa = @MaKhoa
+        `),
+      pool.request()
+        .input('MaKhoa', sql.NVarChar, maKhoa)
+        .query(`
+          SELECT px.BienSoXe as bienSo, x.ChuXe as chuXe
+          FROM App_PhanCong_Xe px
+          JOIN App_PhuongTien x ON px.BienSoXe = x.BienSo
+          WHERE px.MaKhoa = @MaKhoa
+        `),
+      getConfigRates(),
+      getFeeNorms(),
+    ]);
+
+    // pool.close(); // Managed by db.ts
+
     return {
       students: studentsRes.recordset.map(r => ({
         id: r.Id,
@@ -134,7 +155,9 @@ export async function getCourseDetailsForAdmissions(maKhoa: string) {
         giaoVien: r.GiaoVien,
         nguoiNop: r.NguoiNop,
         tienThu: r.TienThu,
-        hinhThucThu: r.HinhThucThu
+        hinhThucThu: r.HinhThucThu,
+        daNop: r.DaNop,
+        conNo: r.ConNo
       })),
       teachers: teachersRes.recordset.map(r => ({
         id: r.id,
@@ -144,11 +167,12 @@ export async function getCourseDetailsForAdmissions(maKhoa: string) {
         bienSo: r.bienSo,
         chuXe: r.chuXe
       })),
-      rates
+      rates,
+      feeNorms
     };
   } catch (err: any) {
     console.error("Error getting details", err);
-    return { students: [], teachers: [], rates: {} };
+    return { students: [], teachers: [], cars: [], rates: {}, feeNorms: {} };
   }
 }
 
@@ -162,9 +186,11 @@ export async function addStudent(data: {
   nguoiNop?: string;
   tienThu?: string;
   hinhThucThu?: string;
+  daNop?: number;
+  conNo?: number;
 }) {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     const request = new sql.Request(pool);
     
     const now = new Date();
@@ -181,10 +207,12 @@ export async function addStudent(data: {
     request.input('NguoiNop', sql.NVarChar, data.nguoiNop || '');
     request.input('TienThu', sql.NVarChar, data.tienThu || '');
     request.input('HinhThucThu', sql.NVarChar, data.hinhThucThu || '');
+    request.input('DaNop', sql.Int, data.daNop || 0);
+    request.input('ConNo', sql.Int, data.conNo || 0);
     
     await request.query(`
-      INSERT INTO App_HocVien_V2 (MaDK, MaKhoa, HoTen, NgaySinh, CCCD, SDT, GiaoVien, NguoiNop, TienThu, HinhThucThu, NgayNhap)
-      VALUES (@MaDK, @MaKhoa, @HoTen, @NgaySinh, @CCCD, @SoDienThoai, @GiaoVien, @NguoiNop, @TienThu, @HinhThucThu, GETDATE())
+      INSERT INTO App_HocVien_V2 (MaDK, MaKhoa, HoTen, NgaySinh, CCCD, SDT, GiaoVien, NguoiNop, TienThu, HinhThucThu, NgayNhap, DaNop, ConNo)
+      VALUES (@MaDK, @MaKhoa, @HoTen, @NgaySinh, @CCCD, @SoDienThoai, @GiaoVien, @NguoiNop, @TienThu, @HinhThucThu, GETDATE(), @DaNop, @ConNo)
     `);
     
     // Auto change status if it is currently 'Mới tạo'
@@ -194,7 +222,7 @@ export async function addStudent(data: {
       WHERE MaKhoa = @MaKhoa AND TinhTrang = N'Mới tạo'
     `);
     
-    pool.close();
+    // pool.close(); // Managed by db.ts
     
     revalidatePath('/courses');
     revalidatePath('/admissions/moto');
@@ -210,7 +238,7 @@ export async function addStudent(data: {
 
 export async function getNewlyCreatedCourses() {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     const result = await pool.request().query(`
       SELECT 
         k.MaKhoa as id,
@@ -227,7 +255,7 @@ export async function getNewlyCreatedCourses() {
       LEFT JOIN App_Khoa a ON k.MaKhoa = a.MaKhoa
       WHERE a.TinhTrang IN (N'Mới tạo', N'Đang tuyển sinh')
     `);
-    pool.close();
+    // pool.close(); // Managed by db.ts
     
     const today = new Date().getTime();
     
@@ -268,7 +296,7 @@ export async function getNewlyCreatedCourses() {
 
 export async function submitCourseForApproval(maKhoa: string) {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     await pool.request()
       .input('MaKhoa', sql.NVarChar, maKhoa)
       .query(`
@@ -276,7 +304,7 @@ export async function submitCourseForApproval(maKhoa: string) {
         SET TinhTrang = N'Chờ duyệt' 
         WHERE MaKhoa = @MaKhoa
       `);
-    pool.close();
+    // pool.close(); // Managed by db.ts
     revalidatePath('/admissions/list');
     revalidatePath('/admissions/approval');
     return { success: true };
@@ -287,7 +315,7 @@ export async function submitCourseForApproval(maKhoa: string) {
 
 export async function getPendingApprovalCourses() {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     const result = await pool.request().query(`
       SELECT 
         k.MaKhoa as id,
@@ -308,7 +336,7 @@ export async function getPendingApprovalCourses() {
       WHERE a.TinhTrang = N'Chờ duyệt'
       ORDER BY k.NgayHoc ASC
     `);
-    pool.close();
+    // pool.close(); // Managed by db.ts
     return result.recordset.map(r => ({
       id: r.id,
       name: r.name,
@@ -330,7 +358,7 @@ export async function getPendingApprovalCourses() {
 
 export async function approveCourse(maKhoa: string) {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     
     // Kiểm tra đã duyệt 3 bước chưa (nếu là ô tô), hoặc 1 bước (hồ sơ) nếu là mô tô
     const checkRes = await pool.request()
@@ -362,7 +390,7 @@ export async function approveCourse(maKhoa: string) {
         SET TinhTrang = N'Đang đào tạo' 
         WHERE MaKhoa = @MaKhoa
       `);
-    pool.close();
+    // pool.close(); // Managed by db.ts
     revalidatePath('/admissions/approval');
     revalidatePath('/courses');
     return { success: true };
@@ -373,7 +401,7 @@ export async function approveCourse(maKhoa: string) {
 
 export async function getApprovalDetails(maKhoa: string) {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     
     // Get course info & flags
     const courseRes = await pool.request()
@@ -440,7 +468,7 @@ export async function getApprovalDetails(maKhoa: string) {
       nguoiNop: r.NguoiNop
     }));
 
-    pool.close();
+    // pool.close(); // Managed by db.ts
     return { course, cars, teachers, students };
   } catch (err) {
     console.error("Error getApprovalDetails:", err);
@@ -450,7 +478,7 @@ export async function getApprovalDetails(maKhoa: string) {
 
 export async function updateSubApproval(maKhoa: string, type: 'XE' | 'GV' | 'HOSO') {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     let col = 'DuyetXe';
     if (type === 'GV') col = 'DuyetGV';
     if (type === 'HOSO') col = 'DuyetHoSo';
@@ -462,7 +490,7 @@ export async function updateSubApproval(maKhoa: string, type: 'XE' | 'GV' | 'HOS
         SET ${col} = 1 
         WHERE MaKhoa = @MaKhoa
       `);
-    pool.close();
+    // pool.close(); // Managed by db.ts
     revalidatePath(`/admissions/approval/${maKhoa}`);
     return { success: true };
   } catch (err: any) {
@@ -472,7 +500,7 @@ export async function updateSubApproval(maKhoa: string, type: 'XE' | 'GV' | 'HOS
 
 export async function getApprovedCourses() {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     const result = await pool.request().query(`
       SELECT 
         k.MaKhoa as id,
@@ -485,7 +513,7 @@ export async function getApprovedCourses() {
       WHERE a.TinhTrang = N'Đang đào tạo'
       ORDER BY k.NgayHoc DESC
     `);
-    pool.close();
+    // pool.close(); // Managed by db.ts
     
     return result.recordset.map(r => ({
       id: r.id,

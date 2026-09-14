@@ -69,7 +69,7 @@ export default function ApprovalDetailsClient({
   };
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-6 bg-slate-50/50 min-h-[500px]">
+    <div className="p-6 w-full space-y-6 bg-slate-50/50 min-h-[500px]">
       <div className="flex items-center justify-between">
         <div className="flex items-start gap-4">
           <button onClick={onClose} className="mt-1 flex-shrink-0 p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-600">
@@ -101,7 +101,7 @@ export default function ApprovalDetailsClient({
         </div>
       )}
 
-      <div className={`grid grid-cols-1 ${isMoto ? 'md:grid-cols-1 max-w-2xl mx-auto' : 'md:grid-cols-3'} gap-6`}>
+      <div className={`grid grid-cols-1 ${isMoto ? 'md:grid-cols-1 w-full' : 'md:grid-cols-3'} gap-6`}>
         
         {/* CARS LIST */}
         {!isMoto && (

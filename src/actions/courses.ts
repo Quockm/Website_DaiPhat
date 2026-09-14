@@ -2,25 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import sql from 'mssql';
-
-const serverParts = (process.env.SQL_SERVER_NAME || "").split(",");
-const dbConfig = {
-  user: process.env.SQL_USERNAME,
-  password: process.env.SQL_PASSWORD,
-  server: serverParts[0] || "",
-  port: serverParts.length > 1 ? parseInt(serverParts[1]) : 1433,
-  database: process.env.SQL_DATABASE || "dp_system",
-  options: {
-    encrypt: false,
-    trustServerCertificate: true,
-  }
-};
+import { getDbConnection } from '@/lib/db';
 
 export async function getConfigRates() {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     const result = await pool.request().query("SELECT Hang, SoHocVienTrenXe FROM App_CauHinh_Khoa");
-    pool.close();
+    // pool.close(); // Managed by db.ts
     
     const rates: Record<string, number> = {};
     for (const row of result.recordset) {
@@ -35,7 +23,7 @@ export async function getConfigRates() {
 
 export async function getAvailableResources(hangKhoa: string, ngayKhaiGiang?: string, ngayBeGiang?: string, trungTam: string = 'Đại Phát') {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     
     // Fetch all cars
     const carsResult = await pool.request()
@@ -63,7 +51,7 @@ export async function getAvailableResources(hangKhoa: string, ngayKhaiGiang?: st
       WHERE ISNULL(g.TrungTam, N'Đại Phát') = @TrungTam
     `);
     
-    pool.close();
+    // pool.close(); // Managed by db.ts
     
     return {
       cars: carsResult.recordset.map(c => ({
@@ -105,7 +93,7 @@ export async function createCourse(data: {
   TrungTam: string;
   LuuLuong: number;
   cars: string[];
-  teachers: string[];
+  teachers: number[];
   TongNgay?: string;
   LtBD?: string;
   LtKT?: string;
@@ -125,7 +113,7 @@ export async function createCourse(data: {
   };
 
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     
@@ -166,7 +154,7 @@ export async function createCourse(data: {
       `);
       
       // 3. Insert App_PhanCong_Xe
-      for (const car of data.selectedCars) {
+      for (const car of data.cars) {
         const carReq = new sql.Request(transaction);
         carReq.input('MaKhoa', sql.NVarChar, data.MaKhoa);
         carReq.input('BienSoXe', sql.NVarChar, car);
@@ -174,19 +162,19 @@ export async function createCourse(data: {
       }
       
       // 4. Insert App_PhanCong_GV
-      for (const gv of data.selectedTeachers) {
+      for (const gv of data.teachers) {
         const gvReq = new sql.Request(transaction);
         gvReq.input('MaKhoa', sql.NVarChar, data.MaKhoa);
         gvReq.input('MaGV', sql.NVarChar, gv.toString());
         await gvReq.query(`INSERT INTO App_PhanCong_GV (MaKhoa, MaGV) VALUES (@MaKhoa, @MaGV)`);
       }
       await transaction.commit();
-      pool.close();
+      // pool.close(); // Managed by db.ts
       revalidatePath('/courses');
       return { success: true, hang: data.Hang };
     } catch (err) {
       await transaction.rollback();
-      pool.close();
+      // pool.close(); // Managed by db.ts
       throw err;
     }
   } catch (err: any) {
@@ -221,7 +209,7 @@ function determineCourseStatus(r: any): string {
   const isDat = inRange(r.DatBD, r.DatKT);
   const isSh = inRange(r.ShBD, r.ShKT);
 
-  const statuses = [];
+  const statuses: string[] = [];
   if (isLt) statuses.push("Lý thuyết");
   if (isCb) statuses.push("Cabin");
   if (isDat) statuses.push("DAT");
@@ -247,7 +235,7 @@ function determineCourseStatus(r: any): string {
 
 export async function getCourses() {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     const result = await pool.request().query(`
       SELECT 
         k.MaKhoa as id,
@@ -272,10 +260,10 @@ export async function getCourses() {
         ISNULL(a.TrungTam, N'Đại Phát') as TrungTam
       FROM App_DieuChinh_Khoa k
       LEFT JOIN App_Khoa a ON k.MaKhoa = a.MaKhoa
-      WHERE ISNULL(a.TinhTrang, N'Đang hoạt động') NOT IN (N'Mới tạo', N'Đang tuyển sinh', N'Chờ duyệt')
+      WHERE ISNULL(a.TinhTrang, N'Đang hoạt động') NOT IN (N'Mới tạo', N'Chờ duyệt')
     `);
     
-    pool.close();
+    // pool.close(); // Managed by db.ts
     
     return result.recordset.map(r => ({
       id: r.id,
@@ -304,7 +292,7 @@ export async function getCourses() {
 
 export async function getCourseDetails(courseId: string) {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
     
     // Fetch course details
     const courseResult = await pool.request()
@@ -323,46 +311,44 @@ export async function getCourseDetails(courseId: string) {
     if (courseResult.recordset.length === 0) return null;
     
     const course = courseResult.recordset[0];
-    
-    // Fetch teachers
-    const teachersResult = await pool.request()
-      .input('MaKhoa', sql.NVarChar, courseId)
-      .query(`
-        SELECT g.HoTen, g.NgaySinh, g.CCCD, g.HangGPLX, g.SDT, g.HanGPLX
-        FROM App_PhanCong_GV pg
-        JOIN App_GiaoVien g ON pg.MaGV = CAST(g.Id AS VARCHAR)
-        WHERE pg.MaKhoa = @MaKhoa
-      `);
-      
-    // Fetch cars
-    const carsResult = await pool.request()
-      .input('MaKhoa', sql.NVarChar, courseId)
-      .query(`
-        SELECT x.BienSo, x.HangXe, x.ChuXe, x.HanPhiDAT, x.HanGPTL
-        FROM App_PhanCong_Xe px
-        JOIN App_PhuongTien x ON px.BienSoXe = x.BienSo
-        WHERE px.MaKhoa = @MaKhoa
-      `);
-      
-    // Fetch students
-    let studentsResult = { recordset: [] };
-    try {
-      studentsResult = await pool.request()
+
+    // Fetch teachers, cars and students in parallel (independent queries)
+    const [teachersResult, carsResult, studentsResult] = await Promise.all([
+      pool.request()
+        .input('MaKhoa', sql.NVarChar, courseId)
+        .query(`
+          SELECT g.Id, g.HoTen, g.NgaySinh, g.CCCD, g.HangGPLX, g.SDT, g.HanGPLX
+          FROM App_PhanCong_GV pg
+          JOIN App_GiaoVien g ON pg.MaGV = CAST(g.Id AS VARCHAR)
+          WHERE pg.MaKhoa = @MaKhoa
+        `),
+      pool.request()
+        .input('MaKhoa', sql.NVarChar, courseId)
+        .query(`
+          SELECT x.BienSo, x.HangXe, x.ChuXe, x.HanPhiDAT, x.HanGPTL
+          FROM App_PhanCong_Xe px
+          JOIN App_PhuongTien x ON px.BienSoXe = x.BienSo
+          WHERE px.MaKhoa = @MaKhoa
+        `),
+      pool.request()
         .input('MaKhoa', sql.NVarChar, courseId)
         .query(`
           SELECT HoTen, NgaySinh, CCCD, SDT, MaDK, DauMoi
           FROM App_HocVien_V2
           WHERE MaKhoa = @MaKhoa
-        `);
-    } catch (e) {
-      // ignore
-    }
+        `)
+        .catch((e) => {
+          console.error("Error fetching students for course details:", e);
+          return { recordset: [] as any[] };
+        }),
+    ]);
 
-    pool.close();
+    // pool.close(); // Managed by db.ts
     
     return {
       course,
       teachers: teachersResult.recordset.map(t => ({
+        id: t.Id,
         name: t.HoTen,
         type: t.HangGPLX || '-',
         hanGplx: t.HanGPLX || '-'
@@ -388,3 +374,72 @@ export async function getCourseDetails(courseId: string) {
     return null;
   }
 }
+
+export async function getCurrentCapacity(trungTam: string = 'Đại Phát', hang: string = '') {
+  try {
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
+    
+    let condition = "a.Hang NOT IN ('A1', 'A')"; // Default for OTO
+    if (hang === 'A1') {
+      condition = "a.Hang = 'A1'";
+    } else if (hang === 'A') {
+      condition = "a.Hang = 'A'";
+    } else if (hang === 'MOTO') {
+      condition = "a.Hang IN ('A1', 'A')";
+    }
+
+    const result = await pool.request()
+      .input('TrungTam', sql.NVarChar, trungTam)
+      .query(`
+        SELECT 
+          k.MaKhoa as id,
+          ISNULL(a.LuuLuong, 0) as hv,
+          k.NgayKt as beGiang,
+          ISNULL(a.TinhTrang, N'Đang hoạt động') as status
+        FROM App_Khoa a
+        LEFT JOIN App_DieuChinh_Khoa k ON k.MaKhoa = a.MaKhoa
+        WHERE ${condition}
+        AND ISNULL(a.TrungTam, N'Đại Phát') = @TrungTam
+      `);
+    // pool.close(); // Managed by db.ts
+    
+    const now = new Date().getTime();
+    
+    let total = 0;
+    for (const r of result.recordset) {
+      let isBeGiang = false;
+      if (r.status === 'Đã bế giảng') {
+        isBeGiang = true;
+      } else {
+        const bg = parseDateStr(r.beGiang);
+        if (bg && now > (bg + 24 * 60 * 60 * 1000 - 1)) {
+          isBeGiang = true;
+        }
+      }
+      
+      if (!isBeGiang) {
+        total += r.hv;
+      }
+    }
+    
+    return total;
+  } catch (err) {
+    console.error("Error fetching current capacity:", err);
+    return 0;
+  }
+}
+
+export async function getDashboardStats(trungTam: string = 'Đại Phát') {
+  try {
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
+    const cars = await pool.request().input('TrungTam', sql.NVarChar, trungTam).query('SELECT COUNT(*) as c FROM App_PhuongTien WHERE ISNULL(TrungTam, N\'Đại Phát\') = @TrungTam');
+    const teachers = await pool.request().input('TrungTam', sql.NVarChar, trungTam).query('SELECT COUNT(*) as c FROM App_GiaoVien WHERE ISNULL(TrungTam, N\'Đại Phát\') = @TrungTam');
+    return {
+      totalCars: cars.recordset[0].c,
+      totalTeachers: teachers.recordset[0].c
+    };
+  } catch(e) {
+    return { totalCars: 0, totalTeachers: 0 };
+  }
+}
+

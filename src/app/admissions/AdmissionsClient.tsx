@@ -209,11 +209,11 @@ export default function AdmissionsClient({ initialData }: { initialData: Admissi
                               <td className="px-4 py-3">{student.dob}</td>
                               <td className="px-4 py-3">
                                 <span className={`px-2 py-1 rounded font-bold border ${feeColor}`}>
-                                  {student.hocPhi.toLocaleString('vi-VN')}
+                                  {student.hocPhi.toLocaleString('en-US')}
                                 </span>
                               </td>
                               <td className="px-4 py-3 font-bold text-slate-700">
-                                {student.thieu > 0 ? student.thieu.toLocaleString('vi-VN') : '-'}
+                                {student.thieu > 0 ? student.thieu.toLocaleString('en-US') : '-'}
                               </td>
                               <td className="px-4 py-3 text-xs">{student.hinhThuc || '-'}</td>
                               <td className="px-4 py-3">

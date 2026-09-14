@@ -100,20 +100,22 @@ export async function getAssignmentData() {
 }
 
 export async function saveAssignment(courseId: string, teacherIds: string[], carIds: string[]) {
+  const poolDp = await getDbConnection('dp_system');
+  const transaction = new sql.Transaction(poolDp);
+  await transaction.begin();
+
   try {
-    const poolDp = await getDbConnection('dp_system');
-    
     // Process Teachers
     // First, get all teachers
-    const allTeachers = await poolDp.request().query("SELECT STT as Id, HoTen, Khoa FROM App_GiaoVien");
-    
+    const allTeachers = await new sql.Request(transaction).query("SELECT STT as Id, HoTen, Khoa FROM App_GiaoVien");
+
     for (const row of allTeachers.recordset) {
       const id = row.Id ? row.Id.toString() : row.HoTen;
       let khoas = row.Khoa ? row.Khoa.toString().split(',').map((k: string) => k.trim()).filter((k: string) => k) : [];
-      
+
       const isSelected = teacherIds.includes(id);
       const hasCourse = khoas.includes(courseId);
-      
+
       let changed = false;
       if (isSelected && !hasCourse) {
         khoas.push(courseId);
@@ -122,27 +124,26 @@ export async function saveAssignment(courseId: string, teacherIds: string[], car
         khoas = khoas.filter((k: string) => k !== courseId);
         changed = true;
       }
-      
+
       if (changed) {
         const newKhoaStr = khoas.join(', ');
-        await poolDp.request()
+        await new sql.Request(transaction)
           .input('khoa', sql.NVarChar, newKhoaStr)
-          .input('id', sql.NVarChar, id) // wait, STT is int usually. Let's match by HoTen just to be safe if Id is sketchy
           .input('hoten', sql.NVarChar, row.HoTen)
-          .query("UPDATE App_GiaoVien SET Khoa = @khoa WHERE HoTen = @hoten"); 
+          .query("UPDATE App_GiaoVien SET Khoa = @khoa WHERE HoTen = @hoten");
       }
     }
 
     // Process Cars
-    const allCars = await poolDp.request().query("SELECT BienSo, DangDiKhoa FROM App_PhuongTien");
-    
+    const allCars = await new sql.Request(transaction).query("SELECT BienSo, DangDiKhoa FROM App_PhuongTien");
+
     for (const row of allCars.recordset) {
       const id = row.BienSo;
       let khoas = row.DangDiKhoa ? row.DangDiKhoa.toString().split(',').map((k: string) => k.trim()).filter((k: string) => k) : [];
-      
+
       const isSelected = carIds.includes(id);
       const hasCourse = khoas.includes(courseId);
-      
+
       let changed = false;
       if (isSelected && !hasCourse) {
         khoas.push(courseId);
@@ -151,18 +152,20 @@ export async function saveAssignment(courseId: string, teacherIds: string[], car
         khoas = khoas.filter((k: string) => k !== courseId);
         changed = true;
       }
-      
+
       if (changed) {
         const newKhoaStr = khoas.join(', ');
-        await poolDp.request()
+        await new sql.Request(transaction)
           .input('khoa', sql.NVarChar, newKhoaStr)
           .input('bienso', sql.NVarChar, id)
           .query("UPDATE App_PhuongTien SET DangDiKhoa = @khoa WHERE BienSo = @bienso");
       }
     }
 
+    await transaction.commit();
     return { success: true };
   } catch (error) {
+    await transaction.rollback();
     console.error('Error saving assignment:', error);
     throw new Error('Could not save assignment');
   }

@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Search, Contact, ChevronLeft, ChevronRight, Edit, X, Save, Trash2, Users } from "lucide-react";
-import { getTeachers, updateTeacher, deleteTeacher, TeacherData } from "@/actions/teachers";
+import { getTeachers, updateTeacher, addTeacher, deleteTeacher, TeacherData } from "@/actions/teachers";
+import * as Tabs from "@radix-ui/react-tabs";
 
 type Props = {
   initialTeachers: TeacherData[];
@@ -32,6 +33,7 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
   const [editForm, setEditForm] = useState<Partial<TeacherData>>({});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState("dao-tao");
 
   const isFirstRender = useRef(true);
 
@@ -56,6 +58,7 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
 
   const handleEditClick = (teacher: TeacherData) => {
     setEditingTeacher(teacher);
+    setActiveTab("dao-tao");
     setEditForm({
       HoTen: teacher.HoTen,
       NgaySinh: teacher.NgaySinh,
@@ -66,7 +69,30 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
       HangGVTH: teacher.HangGVTH,
       SDT: teacher.SDT,
       NguoiPhuTrach: teacher.NguoiPhuTrach,
-      TrungTam: teacher.TrungTam || "Đại Phát"
+      TrungTam: teacher.TrungTam || "Đại Phát",
+      
+      // New fields
+      NhomGiaoVien: teacher.NhomGiaoVien,
+      HanCCCD: teacher.HanCCCD,
+      TinhTrangHanCCCD: teacher.TinhTrangHanCCCD,
+      HinhThucTuyenDung: teacher.HinhThucTuyenDung,
+      LoaiHopDong: teacher.LoaiHopDong,
+      SoHopDong: teacher.SoHopDong,
+      NgayBaoTangBHXH: teacher.NgayBaoTangBHXH,
+      SoBHXH: teacher.SoBHXH,
+      TrinhDoVanHoa: teacher.TrinhDoVanHoa,
+      TrinhDoChuyenMon: teacher.TrinhDoChuyenMon,
+      TrinhDoSuPham: teacher.TrinhDoSuPham,
+      BacNVSP: teacher.BacNVSP,
+      NgayTrungTuyenGPLX: teacher.NgayTrungTuyenGPLX,
+      TinhTrangHanGPLX: teacher.TinhTrangHanGPLX,
+      HangGiaoVien: teacher.HangGiaoVien,
+      HanSucKhoe: teacher.HanSucKhoe,
+      TrangThaiBHXH: teacher.TrangThaiBHXH,
+      NoiSinh: teacher.NoiSinh,
+      DiaChiThuongTru: teacher.DiaChiThuongTru,
+      NoiDangKyKhamChuaBenh: teacher.NoiDangKyKhamChuaBenh,
+      MaSoThue: teacher.MaSoThue,
     });
   };
 
@@ -77,12 +103,21 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
   const handleSave = async () => {
     if (!editingTeacher) return;
     setSaving(true);
-    const res = await updateTeacher(editingTeacher.Id, editForm);
-    if (res.success) {
-      setTeachers(teachers.map(t => t.Id === editingTeacher.Id ? { ...t, ...editForm } : t));
-      setEditingTeacher(null);
+    if (editingTeacher.Id === 0) {
+      const res = await addTeacher(editForm);
+      if (res.success) {
+        window.location.reload();
+      } else {
+        alert("Lỗi khi thêm: " + res.error);
+      }
     } else {
-      alert("Lỗi khi lưu: " + res.error);
+      const res = await updateTeacher(editingTeacher.Id, editForm);
+      if (res.success) {
+        setTeachers(teachers.map(t => t.Id === editingTeacher.Id ? { ...t, ...editForm } : t));
+        setEditingTeacher(null);
+      } else {
+        alert("Lỗi khi lưu: " + res.error);
+      }
     }
     setSaving(false);
   };
@@ -120,7 +155,7 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 ml-auto w-full md:w-auto">
           {Object.entries(stats.details).map(([cat, count]) => (
             <div key={cat} className="flex items-center justify-between gap-3 px-3 py-2 bg-slate-50 text-slate-700 rounded-lg border border-slate-100 hover:border-indigo-200 hover:bg-white transition-colors cursor-default shadow-sm">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase">Hạng {cat}:</span>
+              <span className="text-xs font-semibold text-slate-500 uppercase">Hạng {cat}:</span>
               <span className="text-sm font-black text-indigo-600">{count}</span>
             </div>
           ))}
@@ -138,6 +173,16 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
               Danh sách Giáo viên ({total})
             </CardTitle>
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  setEditingTeacher({ Id: 0, HoTen: '', STT: 0, NgaySinh: '', CCCD: '', TrinhDo: '', HangGPLX: '', HangGVTH: '', SDT: '', NguoiPhuTrach: '', HanGPLX: '', Avatar: '', TrungTam: 'Đại Phát' });
+                  setEditForm({});
+                }}
+                className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Thêm mới
+              </button>
               <select
                 value={trungTamFilter}
                 onChange={(e) => { setTrungTamFilter(e.target.value); setPage(1); }}
@@ -206,7 +251,7 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
                   teachers.map((teacher, idx) => (
                     <tr key={teacher.Id || idx} className="hover:bg-indigo-50/50 transition-colors bg-white group">
                       <td className="px-4 py-3 text-center font-semibold text-slate-500">
-                        {teacher.STT}
+                        {(page - 1) * 50 + idx + 1}
                       </td>
                       <td className="px-4 py-3">
                         <div className="font-bold text-slate-900">{teacher.HoTen}</div>
@@ -280,132 +325,181 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
       {/* Edit Modal */}
       {editingTeacher && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <Card className="w-full max-w-lg bg-white shadow-2xl border-0 overflow-hidden">
-            <CardHeader className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex flex-row items-center justify-between">
-              <CardTitle className="text-lg font-bold text-slate-800">Chỉnh sửa Giáo viên</CardTitle>
+          <Card className="w-full max-w-4xl bg-white shadow-2xl border-0 overflow-hidden flex flex-col max-h-[90vh]">
+            <CardHeader className="bg-slate-50 border-b border-slate-100 px-6 py-4 flex flex-row items-center justify-between shrink-0">
+              <CardTitle className="text-lg font-bold text-slate-800">{editingTeacher.Id === 0 ? "Thêm mới Giáo viên" : `Chỉnh sửa Giáo viên: ${editForm.HoTen || ""}`}</CardTitle>
               <button onClick={() => setEditingTeacher(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </CardHeader>
-            <CardContent className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Họ Tên</label>
-                  <input 
-                    type="text" 
-                    value={editForm.HoTen || ""} 
-                    onChange={(e) => setEditForm({...editForm, HoTen: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Ngày sinh (dd-mm-yyyy)</label>
-                  <input 
-                    type="text" 
-                    value={editForm.NgaySinh || ""} 
-                    onChange={(e) => setEditForm({...editForm, NgaySinh: e.target.value})}
-                    placeholder="VD: 01-01-1990"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">CCCD / CMND</label>
-                  <input 
-                    type="text" 
-                    value={editForm.CCCD || ""} 
-                    onChange={(e) => setEditForm({...editForm, CCCD: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Số điện thoại</label>
-                  <input 
-                    type="text" 
-                    value={editForm.SDT || ""} 
-                    onChange={(e) => setEditForm({...editForm, SDT: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Trình độ</label>
-                  <select
-                    value={editForm.TrinhDo || ""}
-                    onChange={(e) => setEditForm({...editForm, TrinhDo: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            <CardContent className="p-0 overflow-hidden flex flex-col">
+              
+              
+              
+              <Tabs.Root defaultValue="personal" className="flex flex-col h-full flex-1 min-h-0">
+                <Tabs.List className="flex border-b border-slate-200 px-6 shrink-0 bg-white shadow-sm z-10 overflow-x-auto">
+                  <Tabs.Trigger 
+                    value="personal" 
+                    className="px-4 py-3 text-sm font-bold text-slate-500 border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:text-blue-700 hover:text-slate-700 transition-colors focus:outline-none uppercase whitespace-nowrap"
                   >
-                    <option value="">-- Chọn trình độ --</option>
-                    {trinhDoOptions.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Người phụ trách</label>
-                  <input 
-                    type="text" 
-                    value={editForm.NguoiPhuTrach || ""} 
-                    onChange={(e) => setEditForm({...editForm, NguoiPhuTrach: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Hạng GPLX</label>
-                  <select
-                    value={editForm.HangGPLX || ""}
-                    onChange={(e) => setEditForm({...editForm, HangGPLX: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                    1. THÔNG TIN CƠ BẢN
+                  </Tabs.Trigger>
+                  <Tabs.Trigger 
+                    value="qualifications" 
+                    className="px-4 py-3 text-sm font-bold text-slate-500 border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:text-indigo-700 hover:text-slate-700 transition-colors focus:outline-none uppercase whitespace-nowrap"
                   >
-                    <option value="">-- Chọn hạng --</option>
-                    {allHangs.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
+                    2. CHUYÊN MÔN & BẰNG CẤP
+                  </Tabs.Trigger>
+                </Tabs.List>
+
+                <div className="overflow-y-auto p-6 flex-1 bg-slate-50/30">
+                  {/* TAB 1: THÔNG TIN CƠ BẢN */}
+                  <Tabs.Content value="personal" className="space-y-6 focus:outline-none">
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Left Column: Định danh */}
+                      <div className="space-y-4">
+                        <h3 className="text-sm font-bold text-blue-800 uppercase border-b border-blue-100 pb-2">Thông tin Cá nhân</h3>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Họ Tên</label>
+                          <input type="text" value={editForm.HoTen || ""} onChange={e => setEditForm({...editForm, HoTen: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm" placeholder="Nguyễn Văn A" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Số điện thoại</label>
+                          <input type="text" value={editForm.SDT || ""} onChange={e => setEditForm({...editForm, SDT: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Năm sinh</label>
+                          <input type="text" value={editForm.NgaySinh || ""} onChange={e => setEditForm({...editForm, NgaySinh: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm" placeholder="VD: 1990" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Số CCCD</label>
+                          <input type="text" value={editForm.CCCD || ""} onChange={e => setEditForm({...editForm, CCCD: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Hạn CCCD</label>
+                          <input type="text" value={editForm.HanCCCD || ""} onChange={e => setEditForm({...editForm, HanCCCD: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white shadow-sm" placeholder="dd/mm/yyyy" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Tình trạng hạn CCCD</label>
+                          <select value={editForm.TinhTrangHanCCCD || ""} onChange={e => setEditForm({...editForm, TinhTrangHanCCCD: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
+                            <option value="">- Chọn -</option>
+                            <option value="Còn hạn">Còn hạn</option>
+                            <option value="Hết hạn">Hết hạn</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Công tác */}
+                      <div className="space-y-4">
+                        <h3 className="text-sm font-bold text-blue-800 uppercase border-b border-blue-100 pb-2">Thông tin Công tác</h3>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Hình thức tuyển dụng</label>
+                          <select value={editForm.HinhThucTuyenDung || ""} onChange={e => setEditForm({...editForm, HinhThucTuyenDung: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
+                            <option value="">- Chọn -</option>
+                            <option value="Biên chế">Biên chế</option>
+                            <option value="Hợp đồng">Hợp đồng</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Trung tâm</label>
+                          <select value={editForm.TrungTam || "Đại Phát"} onChange={e => setEditForm({...editForm, TrungTam: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
+                            <option value="Đại Phát">Đại Phát</option>
+                            <option value="Tiến Thành">Tiến Thành</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Nhóm giáo viên (Phụ trách)</label>
+                          <input type="text" value={editForm.NhomGiaoVien || editForm.NguoiPhuTrach || ""} onChange={e => setEditForm({...editForm, NhomGiaoVien: e.target.value, NguoiPhuTrach: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm" />
+                        </div>
+                      </div>
+                    </div>
+
+                  </Tabs.Content>
+
+                  {/* TAB 2: CHUYÊN MÔN & BẰNG CẤP */}
+                  <Tabs.Content value="qualifications" className="space-y-6 focus:outline-none">
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Left Column: Trình độ Học vấn */}
+                      <div className="space-y-4">
+                        <h3 className="text-sm font-bold text-indigo-800 uppercase border-b border-indigo-100 pb-2">Trình độ Học vấn</h3>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Trình độ Văn hóa</label>
+                          <select value={editForm.TrinhDoVanHoa || ""} onChange={e => setEditForm({...editForm, TrinhDoVanHoa: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
+                            <option value="">- Chọn -</option>
+                            <option value="12/12">12/12</option>
+                            <option value="9/12">9/12</option>
+                            <option value="Khác">Khác</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Trình độ Chuyên môn</label>
+                          <select value={editForm.TrinhDoChuyenMon || editForm.TrinhDo || ""} onChange={e => setEditForm({...editForm, TrinhDoChuyenMon: e.target.value, TrinhDo: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
+                            <option value="">- Chọn -</option>
+                            {['Trung cấp', 'Cao đẳng', 'Đại học', 'Cao học', 'Khác'].map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Sư phạm</label>
+                          <input type="text" value={editForm.TrinhDoSuPham || ""} onChange={e => setEditForm({...editForm, TrinhDoSuPham: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm" placeholder="VD: Chứng chỉ SP Dạy nghề..." />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Bậc NVSP</label>
+                          <select value={editForm.BacNVSP || ""} onChange={e => setEditForm({...editForm, BacNVSP: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
+                            <option value="">- Chọn -</option>
+                            <option value="Bậc 1">Bậc 1</option>
+                            <option value="Bậc 2">Bậc 2</option>
+                            <option value="Bậc 3">Bậc 3</option>
+                            <option value="Bậc 4">Bậc 4</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Giấy phép lái xe */}
+                      <div className="space-y-4">
+                        <h3 className="text-sm font-bold text-indigo-800 uppercase border-b border-indigo-100 pb-2">Giấy phép Lái xe & Hạng GV</h3>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Hạng GPLX</label>
+                          <select value={editForm.HangGPLX || ""} onChange={e => setEditForm({...editForm, HangGPLX: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
+                            <option value="">- Chọn -</option>
+                            {['A1', 'A2', 'B1', 'B2', 'C', 'D', 'E', 'F'].map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Ngày trúng tuyển (Cấp phép)</label>
+                          <input type="text" value={editForm.NgayTrungTuyenGPLX || ""} onChange={e => setEditForm({...editForm, NgayTrungTuyenGPLX: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm" placeholder="dd/mm/yyyy" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Ngày hết hạn GPLX</label>
+                          <input type="text" value={editForm.HanGPLX || ""} onChange={e => setEditForm({...editForm, HanGPLX: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm" placeholder="dd/mm/yyyy" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Tình trạng hạn GPLX</label>
+                          <select value={editForm.TinhTrangHanGPLX || ""} onChange={e => setEditForm({...editForm, TinhTrangHanGPLX: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
+                            <option value="">- Chọn -</option>
+                            <option value="Còn hạn">Còn hạn</option>
+                            <option value="Hết hạn">Hết hạn</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-1">Hạng giáo viên (Hạng GVTH)</label>
+                          <select value={editForm.HangGiaoVien || editForm.HangGVTH || ""} onChange={e => setEditForm({...editForm, HangGiaoVien: e.target.value, HangGVTH: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
+                            <option value="">- Chọn -</option>
+                            {['A1', 'A2', 'B1', 'B2', 'C', 'D', 'E', 'F'].map(t => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    
+                  </Tabs.Content>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Hạn GPLX (dd-mm-yyyy)</label>
-                  <input 
-                    type="text" 
-                    value={editForm.HanGPLX || ""} 
-                    onChange={(e) => setEditForm({...editForm, HanGPLX: e.target.value})}
-                    placeholder="VD: 31-12-2030"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Hạng GVTH</label>
-                  <select
-                    value={editForm.HangGVTH || ""}
-                    onChange={(e) => setEditForm({...editForm, HangGVTH: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  >
-                    <option value="">-- Chọn hạng --</option>
-                    {allHangs.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1">Trung tâm</label>
-                  <select
-                    value={editForm.TrungTam || "Đại Phát"}
-                    onChange={(e) => setEditForm({...editForm, TrungTam: e.target.value})}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                  >
-                    <option value="Đại Phát">Đại Phát</option>
-                    <option value="Tiến Thành">Tiến Thành</option>
-                  </select>
-                </div>
-              </div>
+              </Tabs.Root>
+
+
+
             </CardContent>
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
               <button 
                 onClick={handleDelete}
                 disabled={deleting}

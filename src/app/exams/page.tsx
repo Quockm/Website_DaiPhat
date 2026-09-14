@@ -103,7 +103,7 @@ export default function ExamsPage() {
                     <td className="px-6 py-4 font-medium text-slate-700">{exam.course}</td>
                     <td className="px-6 py-4 text-center font-bold text-slate-800">{exam.hv}</td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-md text-[11px] font-bold border ${
+                      <span className={`px-2 py-1 rounded-md text-xs font-bold border ${
                         exam.status === 'Đã chốt danh sách' ? 'bg-green-100 text-green-700 border-green-200' :
                         exam.status === 'Chờ Sở GTVT duyệt' ? 'bg-amber-100 text-amber-700 border-amber-200' :
                         'bg-slate-100 text-slate-700 border-slate-300'

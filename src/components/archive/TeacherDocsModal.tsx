@@ -21,6 +21,7 @@ const DOC_TYPES = [
   "Sơ yếu lý lịch",
   "Đơn xin việc",
   "Giấy khám sức khỏe",
+  "Hợp đồng lao động",
 ];
 
 export default function TeacherDocsModal({ isOpen, onClose, teacher, onUpdate }: TeacherDocsModalProps) {

@@ -1,8 +1,8 @@
 import * as React from "react"
 
-export function Select({ value, onValueChange, children }: any) { 
+export function Select({ value, onValueChange, children, className }: any) { 
   return (
-    <select value={value} onChange={e => onValueChange(e.target.value)} className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+    <select value={value} onChange={e => onValueChange(e.target.value)} className={`flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-black ${className || ''}`}>
       {children}
     </select>
   ); 

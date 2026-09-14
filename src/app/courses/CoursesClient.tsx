@@ -53,12 +53,13 @@ export default function CoursesClient({
   const todayDate = today.getDate();
 
   useEffect(() => {
+    // Only scroll automatically on initial mount
     if (isCurrentMonth && todayRef.current) {
       setTimeout(() => {
         todayRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
       }, 300);
     }
-  }, [viewDate, isCurrentMonth, activeTab, showCompleted, trungTamFilter]);
+  }, []); // Run once on mount
 
   const handlePrevMonth = () => {
     setViewDate(new Date(currentYear, currentMonth - 1, 1));
@@ -70,6 +71,9 @@ export default function CoursesClient({
 
   const handleToday = () => {
     setViewDate(new Date());
+    setTimeout(() => {
+      todayRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }, 100);
   };
 
   const parseDate = (dateStr: string) => {
@@ -124,13 +128,6 @@ export default function CoursesClient({
               <option value="Đại Phát">Đại Phát</option>
               <option value="Tiến Thành">Tiến Thành</option>
             </select>
-            <Link href="/admissions/create" className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-bold transition-colors shadow-sm">
-              <Plus className="w-4 h-4" />
-              Tạo Khóa Mới
-            </Link>
-            <Link href="/assignments" className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 px-5 py-2.5 rounded-lg font-bold transition-colors shadow-sm">
-              Phân công GV & Xe
-            </Link>
           </div>
         </div>
       )}
@@ -206,7 +203,7 @@ export default function CoursesClient({
         <CardContent className="p-0">
           <div className="overflow-x-auto custom-scrollbar pb-2" style={{ maxWidth: '100vw' }}>
             <table className="w-full text-left text-sm text-slate-600 min-w-max border-collapse">
-              <thead className="bg-slate-50 text-slate-700 font-extrabold uppercase text-[11px] border-b border-slate-200">
+              <thead className="bg-slate-50 text-slate-700 font-extrabold uppercase text-xs border-b border-slate-200">
                 <tr>
                   <th rowSpan={2} className="px-4 py-3 border-r border-slate-200 sticky left-0 bg-slate-50 z-10 shadow-[1px_0_0_0_#e2e8f0]">Mã Khóa</th>
                   {isOto && <th rowSpan={2} className="px-4 py-3 border-r border-slate-200 text-center">SL Xe</th>}
@@ -226,7 +223,7 @@ export default function CoursesClient({
                   <th colSpan={daysInMonth} className="px-4 py-1 text-center bg-slate-100 border-b border-slate-200">
                     <div className="flex items-center justify-center gap-4">
                       <button onClick={handlePrevMonth} className="px-2 py-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold shadow-sm">&larr;</button>
-                      <span className="cursor-pointer hover:underline text-[13px]" onClick={handleToday}>Tháng {currentMonth + 1}/{currentYear}</span>
+                      <span className="cursor-pointer hover:underline text-sm" onClick={handleToday}>Tháng {currentMonth + 1}/{currentYear}</span>
                       <button onClick={handleNextMonth} className="px-2 py-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold shadow-sm">&rarr;</button>
                     </div>
                   </th>
@@ -283,7 +280,7 @@ export default function CoursesClient({
                         <Link href={`/courses/${course.id}`} className="hover:underline flex items-center gap-1 font-bold text-indigo-700">
                           {course.id} <Edit className="w-3 h-3 text-slate-400" />
                         </Link>
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${statusClass}`}>
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-bold border whitespace-nowrap ${statusClass}`}>
                           {course.status}
                         </span>
                       </div>

@@ -106,7 +106,7 @@ export default async function PrintReceiptPage(props: { params: Promise<{ id: st
           
           <div className="flex border-b border-dotted border-slate-300 pb-1">
             <span className="w-48 font-semibold">Số tiền:</span>
-            <span className="flex-1 font-bold text-lg">{Number(transaction.soTien).toLocaleString('vi-VN')} VNĐ</span>
+            <span className="flex-1 font-bold text-lg">{Number(transaction.soTien).toLocaleString('en-US')} VNĐ</span>
           </div>
           
           <div className="flex border-b border-dotted border-slate-300 pb-1">

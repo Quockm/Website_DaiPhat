@@ -45,7 +45,7 @@ export default function OtoAdmissionsClient({ initialCourses }: { initialCourses
   const rate = selectedCourseData ? (courseDetails?.rates?.[selectedCourseData.hangXe] || 5) : 5;
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto">
+    <div className="p-6 w-full">
       <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
@@ -222,17 +222,18 @@ function CarTeacherBlock({ car, teacher, rate, students, maKhoa, onSuccess }: an
         </div>
       </div>
       <div className="overflow-x-auto">
-        <div className="min-w-[1100px]">
+        <div className="min-w-[1300px]">
           {/* Header */}
           <div className="flex items-center gap-3 bg-slate-100 p-3 text-xs font-semibold text-slate-600 border-b border-slate-200">
             <div className="w-10 flex-shrink-0 text-center">STT</div>
             <div className="flex-1 flex items-center gap-3">
               <div className="w-[180px]">Họ tên *</div>
-              <div className="w-[130px]">Ngày sinh *</div>
+              <div className="w-[120px]">Ngày sinh *</div>
               <div className="w-[120px]">SĐT *</div>
               <div className="w-[140px]">CCCD *</div>
-              <div className="w-[160px]">Người nộp</div>
-              <div className="w-[120px]">Tiền thu</div>
+              <div className="w-[150px]">Người nộp</div>
+              <div className="w-[110px]">Tiền thu</div>
+              <div className="w-[110px]">Còn nợ</div>
               <div className="w-[120px]">Hình thức chuyển</div>
               <div className="w-[80px]">Thao tác</div>
             </div>
@@ -253,11 +254,12 @@ function CarTeacherBlock({ car, teacher, rate, students, maKhoa, onSuccess }: an
                     {student ? (
                       <div className="flex items-center gap-3 py-1 text-sm text-slate-900">
                         <div className="w-[180px] font-medium">{student.hoTen}</div>
-                        <div className="w-[130px]">{student.ngaySinh}</div>
+                        <div className="w-[120px]">{student.ngaySinh}</div>
                         <div className="w-[120px]">{student.soDienThoai}</div>
                         <div className="w-[140px]">{student.cccd}</div>
-                        <div className="w-[160px] text-xs">{student.nguoiNop || '-'}</div>
-                        <div className="w-[120px] font-medium text-emerald-600">{student.tienThu || '-'}</div>
+                        <div className="w-[150px] text-xs">{student.nguoiNop || '-'}</div>
+                        <div className="w-[110px] font-medium text-emerald-600">{student.tienThu ? student.tienThu.toLocaleString('en-US') : '-'}</div>
+                        <div className="w-[110px] font-medium text-red-600">{student.conNo ? student.conNo.toLocaleString('en-US') : '0'}</div>
                         <div className="w-[120px]">{student.hinhThucThu || '-'}</div>
                         <div className="w-[80px]">
                           <span className="text-xs text-indigo-600 font-medium px-2 py-1 bg-indigo-50 rounded">Đã lưu</span>
@@ -285,8 +287,12 @@ function CarTeacherBlock({ car, teacher, rate, students, maKhoa, onSuccess }: an
 function EmptySlotForm({ maKhoa, giaoVien, chuXe, onSuccess }: any) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    hoTen: '', ngaySinh: '', cccd: '', soDienThoai: '', nguoiNop: chuXe || '', tienThu: '', hinhThucThu: ''
+    hoTen: '', ngaySinh: '', cccd: '', soDienThoai: '', nguoiNop: chuXe || '', tienThu: '', hinhThucThu: '', daNop: ''
   });
+
+  const parsedTienThu = parseInt(formData.tienThu.replace(/\D/g, '')) || 0;
+  const parsedDaNop = parseInt(formData.daNop.replace(/\D/g, '')) || 0;
+  const conNo = parsedTienThu - parsedDaNop;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -298,11 +304,14 @@ function EmptySlotForm({ maKhoa, giaoVien, chuXe, onSuccess }: any) {
     const res = await addStudent({
       maKhoa,
       giaoVien,
-      ...formData
+      ...formData,
+      tienThu: parsedTienThu.toString(),
+      daNop: parsedTienThu,
+      conNo: conNo
     });
     setLoading(false);
     if (res.success) {
-      setFormData({ hoTen: '', ngaySinh: '', cccd: '', soDienThoai: '', nguoiNop: chuXe || '', tienThu: '', hinhThucThu: '' });
+      setFormData({ hoTen: '', ngaySinh: '', cccd: '', soDienThoai: '', nguoiNop: chuXe || '', tienThu: '', hinhThucThu: '', daNop: '' });
       onSuccess();
     } else {
       alert("Lỗi: " + res.error);
@@ -312,11 +321,12 @@ function EmptySlotForm({ maKhoa, giaoVien, chuXe, onSuccess }: any) {
   return (
     <form onSubmit={handleSubmit} className="flex gap-3 items-center">
       <Input placeholder="Họ tên" value={formData.hoTen} onChange={e => setFormData({...formData, hoTen: e.target.value})} className="w-[180px] h-9 text-sm" />
-      <Input type="date" value={formData.ngaySinh} onChange={e => setFormData({...formData, ngaySinh: e.target.value})} className="w-[130px] h-9 text-sm" />
+      <Input type="date" value={formData.ngaySinh} onChange={e => setFormData({...formData, ngaySinh: e.target.value})} className="w-[120px] h-9 text-sm" />
       <Input placeholder="SĐT" value={formData.soDienThoai} onChange={e => setFormData({...formData, soDienThoai: e.target.value})} className="w-[120px] h-9 text-sm" />
       <Input placeholder="CCCD" value={formData.cccd} onChange={e => setFormData({...formData, cccd: e.target.value})} className="w-[140px] h-9 text-sm" />
-      <Input placeholder="Người nộp" value={formData.nguoiNop} onChange={e => setFormData({...formData, nguoiNop: e.target.value})} className="w-[160px] h-9 text-xs" />
-      <Input placeholder="Tiền thu" value={formData.tienThu} onChange={e => setFormData({...formData, tienThu: e.target.value})} className="w-[120px] h-9 text-sm" />
+      <Input placeholder="Người nộp" value={formData.nguoiNop} onChange={e => setFormData({...formData, nguoiNop: e.target.value})} className="w-[150px] h-9 text-xs" />
+      <Input placeholder="Tiền thu" value={formData.tienThu} onChange={e => setFormData({...formData, tienThu: e.target.value})} className="w-[110px] h-9 text-sm" />
+      <div className="w-[110px] text-sm font-medium text-red-500">{conNo > 0 ? conNo.toLocaleString('en-US') : 0}</div>
       <Select value={formData.hinhThucThu} onValueChange={(val) => setFormData({...formData, hinhThucThu: val})}>
         <SelectTrigger className="w-[120px] h-9 text-sm">
           <SelectValue placeholder="Chọn" />

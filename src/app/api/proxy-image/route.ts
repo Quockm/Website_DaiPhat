@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     
     // Extract Google Drive ID if it's a Drive URL
     if (url.includes('drive.google.com')) {
-      let fileId = null;
+      let fileId: string | null = null;
       const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
       if (match) {
         fileId = match[1];

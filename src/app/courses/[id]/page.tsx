@@ -40,7 +40,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
             Hạng {course.HangXe} • {students.length} Học viên • Khai giảng: {course.KhaiGiang || 'Chưa rõ'}
           </p>
         </div>
-        <Link href="/assignments" className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
+        <Link href={`/allocations?courseId=${course.MaKH}`} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold transition-colors shadow-sm">
           Thay đổi Phân Công &rarr;
         </Link>
       </div>
@@ -64,7 +64,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                     <span className="font-extrabold text-red-700 text-lg">{car.id}</span>
                     <div className="text-sm font-semibold text-slate-500">Hạng: {car.type}</div>
                   </div>
-                  <div className="text-right text-[11px] text-slate-500 flex flex-col items-end">
+                  <div className="text-right text-xs text-slate-500 flex flex-col items-end">
                     <span>Hạn phí DAT: <strong className="text-slate-700">{car.hanPhiDAT}</strong></span>
                     <span>Hạn GPXTL: <strong className="text-slate-700">{car.hanGpxtl}</strong></span>
                   </div>
@@ -95,7 +95,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
                     <span className="font-bold text-slate-800 text-base">{teacher.name}</span>
                     <div className="text-sm font-semibold text-slate-500">Hạng: {teacher.type}</div>
                   </div>
-                  <div className="text-right text-[11px] text-slate-500">
+                  <div className="text-right text-xs text-slate-500">
                     Hạn GPLX: <strong className="text-slate-700">{teacher.hanGplx}</strong>
                   </div>
                 </div>
@@ -121,7 +121,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         <CardContent className="p-0">
           <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-left text-sm text-slate-600 min-w-max">
-              <thead className="bg-slate-50 text-slate-700 font-extrabold uppercase text-[11px] sticky top-0 shadow-sm border-b border-slate-200">
+              <thead className="bg-slate-50 text-slate-700 font-extrabold uppercase text-xs sticky top-0 shadow-sm border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3">STT</th>
                   <th className="px-4 py-3">Họ và Tên</th>
