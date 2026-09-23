@@ -2,6 +2,7 @@
 
 import { getDbConnection } from "@/lib/db";
 import sql from "mssql";
+import { revalidatePath } from "next/cache";
 
 export async function getAbsentRecords(type: "TN" | "SH", search: string = "") {
   try {
@@ -50,6 +51,8 @@ export async function addAbsentRecord(data: any) {
       (@type, @cccd, @sbd, @name, @hang, @original_exam_date, @result, @storage_location, @note)
     `);
 
+    revalidatePath('/absent/testing');
+    revalidatePath('/absent/graduation');
     return { success: true };
   } catch (error: any) {
     console.error("Lỗi khi thêm hồ sơ vắng rớt:", error);
@@ -71,6 +74,8 @@ export async function checkoutAbsentRecord(id: number, target_exam_date: string)
       WHERE id = @id
     `);
 
+    revalidatePath('/absent/testing');
+    revalidatePath('/absent/graduation');
     return { success: true };
   } catch (error: any) {
     console.error("Lỗi khi xuất kho hồ sơ vắng rớt:", error);
@@ -92,6 +97,8 @@ export async function returnAbsentRecord(id: number, storage_location: string) {
       WHERE id = @id
     `);
 
+    revalidatePath('/absent/testing');
+    revalidatePath('/absent/graduation');
     return { success: true };
   } catch (error: any) {
     console.error("Lỗi khi nhập lại kho hồ sơ vắng rớt:", error);
@@ -106,9 +113,69 @@ export async function deleteAbsentRecord(id: number) {
     req.input('id', sql.Int, id);
 
     await req.query(`DELETE FROM absent_records_inventory WHERE id = @id`);
+    revalidatePath('/absent/testing');
+    revalidatePath('/absent/graduation');
+    revalidatePath('/absent/testing');
+    revalidatePath('/absent/graduation');
     return { success: true };
   } catch (error: any) {
     console.error("Lỗi khi xoá hồ sơ vắng rớt:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateAbsentRecordLocation(id: number, storage_location: string) {
+  try {
+    const pool = await getDbConnection("DP_SH_System");
+    const req = pool.request();
+    
+    req.input('id', sql.Int, id);
+    req.input('storage_location', sql.NVarChar, storage_location);
+
+    await req.query(`
+      UPDATE absent_records_inventory 
+      SET storage_location = @storage_location, updated_at = GETDATE()
+      WHERE id = @id
+    `);
+
+    revalidatePath('/absent/testing');
+    revalidatePath('/absent/graduation');
+    return { success: true };
+  } catch (error: any) {
+    console.error("Lỗi khi cập nhật vị trí lưu kho:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateAbsentRecord(id: number, data: any) {
+  try {
+    const pool = await getDbConnection("DP_SH_System");
+    const req = pool.request();
+    
+    req.input('id', sql.Int, id);
+    req.input('hang', sql.VarChar, data.hang || '');
+    req.input('original_exam_date', sql.VarChar, data.original_exam_date || '');
+    req.input('result', sql.NVarChar, data.result || '');
+    req.input('storage_location', sql.NVarChar, data.storage_location || '');
+    req.input('note', sql.NVarChar, data.note || '');
+
+    await req.query(`
+      UPDATE absent_records_inventory 
+      SET 
+        hang = @hang,
+        original_exam_date = @original_exam_date,
+        result = @result,
+        storage_location = @storage_location,
+        note = @note,
+        updated_at = GETDATE()
+      WHERE id = @id
+    `);
+
+    revalidatePath('/absent/testing');
+    revalidatePath('/absent/graduation');
+    return { success: true };
+  } catch (error: any) {
+    console.error("Lỗi khi cập nhật hồ sơ:", error);
     return { success: false, error: error.message };
   }
 }
@@ -121,9 +188,9 @@ export async function getStudentInfoByCCCD(cccd: string, type: "TN" | "SH") {
 
     let query = "";
     if (type === "TN") {
-      query = `SELECT TOP 1 cccd, sbd, name, hang, exam_date as original_exam_date, kq_final as result FROM graduation_students WHERE cccd = @cccd ORDER BY id DESC`;
+      query = `SELECT TOP 1 cccd, sbd, name, hang, exam_date as original_exam_date, kq_final as result, gv FROM graduation_students WHERE cccd = @cccd ORDER BY id DESC`;
     } else {
-      query = `SELECT TOP 1 cccd, sbd, name, hang, exam_date as original_exam_date, kq_final as result FROM students WHERE cccd = @cccd ORDER BY id DESC`;
+      query = `SELECT TOP 1 cccd, sbd, name, hang, exam_date as original_exam_date, kq_final as result, gv FROM students WHERE cccd = @cccd ORDER BY id DESC`;
     }
 
     const result = await req.query(query);
@@ -151,7 +218,7 @@ export async function searchStudentsByCCCD(queryStr: string, type?: "TN" | "SH")
       if (type === "TN") {
         query = `
           SELECT TOP 10 
-            cccd, sbd, name, hang, exam_date as original_exam_date, kq_final as result 
+            cccd, sbd, name, hang, exam_date as original_exam_date, kq_final as result, gv 
           FROM graduation_students 
           WHERE cccd LIKE @queryStr
           ORDER BY id DESC
@@ -159,7 +226,7 @@ export async function searchStudentsByCCCD(queryStr: string, type?: "TN" | "SH")
       } else {
         query = `
           SELECT TOP 10 
-            cccd, sbd, name, hang, exam_date as original_exam_date, kq_final as result 
+            cccd, sbd, name, hang, exam_date as original_exam_date, kq_final as result, gv 
           FROM students 
           WHERE cccd LIKE @queryStr
           ORDER BY id DESC

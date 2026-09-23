@@ -9,12 +9,16 @@ export async function getTestingStudents(scheduleId?: string) {
     
     let query = `
       SELECT 
-        cccd, stt, sbd, name, dob, school, hang, pet, exam_date,
-        qr_lt, qr_hinh, qr_duong, qr_gplx,
-        score_lt, score_hinh, score_duong, kq_final,
-        result_lt, result_hinh, result_duong,
-        gv, ndsh, ma_dk
-      FROM students
+        s.cccd, s.stt, s.sbd, s.name, s.dob, s.school, s.hang, s.pet, s.exam_date,
+        s.qr_lt, s.qr_hinh, s.qr_duong, s.qr_gplx,
+        s.score_lt, s.score_hinh, s.score_duong, s.kq_final,
+        s.result_lt, s.result_hinh, s.result_duong,
+        s.gv, s.ndsh, s.ma_dk,
+        s.is_health_check, s.is_profile_valid,
+        g.exam_date as tn_exam_date,
+        g.kq_final as tn_kq_final
+      FROM students s
+      LEFT JOIN graduation_students g ON LTRIM(RTRIM(s.cccd)) = LTRIM(RTRIM(g.cccd))
     `;
     
     let request = pool.request();
@@ -27,26 +31,49 @@ export async function getTestingStudents(scheduleId?: string) {
       
       if (schRes.recordset.length > 0) {
         const eDate = schRes.recordset[0].exam_date;
-        query += ` WHERE exam_date = @eDate`;
+        query += ` WHERE s.exam_date = @eDate`;
         request = pool.request(); // Recreate request to avoid parameter clashes if any
         request.input('eDate', sql.VarChar, eDate);
       } else {
-        query += ` WHERE exam_date = @scheduleId`;
+        query += ` WHERE s.exam_date = @scheduleId`;
         request = pool.request();
         request.input('scheduleId', sql.VarChar, scheduleId);
       }
     } else {
-      query += ` WHERE exam_date != '31-07-2026'`;
+      query += ` WHERE s.exam_date != '31-07-2026' OR s.exam_date IS NULL OR s.exam_date = ''`;
       request = pool.request();
     }
     
-    query += ` ORDER BY TRY_CAST(stt AS INT) ASC`;
+    query += ` ORDER BY TRY_CAST(s.stt AS INT) ASC`;
     
     const result = await request.query(query);
     
     return { success: true, data: result.recordset };
   } catch (error: any) {
     console.error("Lỗi khi lấy danh sách học viên sát hạch:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function syncGraduationToTesting() {
+  try {
+    const pool = await getDbConnection("DP_SH_System");
+    
+    // Tìm những học viên có kq_final = 'ĐẠT' ở Tốt nghiệp nhưng chưa có trong Sát hạch
+    await pool.request().query(`
+      INSERT INTO students (cccd, name, dob, school, hang)
+      SELECT LTRIM(RTRIM(g.cccd)), g.name, g.dob, g.school, g.hang
+      FROM graduation_students g
+      LEFT JOIN students s ON LTRIM(RTRIM(g.cccd)) = LTRIM(RTRIM(s.cccd))
+      WHERE (LTRIM(RTRIM(UPPER(g.kq_final))) = N'ĐẠT' OR LTRIM(RTRIM(UPPER(g.kq_final))) = 'DAT')
+        AND s.cccd IS NULL
+        AND g.cccd IS NOT NULL
+        AND LTRIM(RTRIM(g.cccd)) != ''
+    `);
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error("Lỗi khi đồng bộ dữ liệu TN -> SH:", error);
     return { success: false, error: error.message };
   }
 }
@@ -280,3 +307,58 @@ export async function updateSTTData(sttDataList: {cccd: string, stt: string}[]) 
   }
 }
 
+export async function assignTestingExamDates(cccds: string[], examDate: string) {
+  try {
+    const pool = await getDbConnection("DP_SH_System");
+    for (const cccd of cccds) {
+      const req = pool.request();
+      req.input('cccd', sql.VarChar, cccd);
+      req.input('exam_date', sql.VarChar, examDate);
+      await req.query(`
+        UPDATE students 
+        SET exam_date = @exam_date
+        WHERE cccd = @cccd
+      `);
+    }
+    return { success: true };
+  } catch (error: any) {
+    console.error("Lỗi khi xếp lịch thi SH:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function unassignTestingExamDate(cccd: string) {
+  try {
+    const pool = await getDbConnection("DP_SH_System");
+    const req = pool.request();
+    req.input('cccd', sql.VarChar, cccd);
+    await req.query(`
+      UPDATE students 
+      SET exam_date = NULL
+      WHERE cccd = @cccd
+    `);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Lỗi khi hủy lịch thi SH:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateTestingCheck(cccd: string, field: 'is_health_check' | 'is_profile_valid', value: boolean) {
+  try {
+    const pool = await getDbConnection("DP_SH_System");
+    const req = pool.request();
+    req.input('cccd', sql.VarChar, cccd);
+    req.input('val', sql.Bit, value ? 1 : 0);
+    // Secure query since field is typed strictly
+    await req.query(`
+      UPDATE students 
+      SET ${field} = @val
+      WHERE cccd = @cccd
+    `);
+    return { success: true };
+  } catch (error: any) {
+    console.error(`Lỗi cập nhật ${field}:`, error);
+    return { success: false, error: error.message };
+  }
+}

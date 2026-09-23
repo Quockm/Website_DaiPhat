@@ -100,6 +100,7 @@ const navItems: NavItem[] = [
       { name: "Tạo khóa", href: "/admissions/create", implemented: true },
       { name: "Tuyển sinh Moto", href: "/admissions/moto", implemented: true },
       { name: "Tuyển sinh Oto", href: "/admissions/oto", implemented: true },
+      { name: "Danh sách Tuyển Sinh", href: "/admissions/students", implemented: true },
       { name: "Danh sách đã tạo", href: "/admissions/list", implemented: true },
       { name: "Danh Sách Chờ Duyệt", href: "/admissions/approval", implemented: true },
     ]
@@ -167,7 +168,6 @@ const navItems: NavItem[] = [
       { name: "Danh sách dự thi", href: "/exams/graduation/students", implemented: true },
       { name: "Cập nhật điểm thi", href: "/exams/graduation/scores", implemented: true },
       { name: "Thống kê kết quả", href: "/exams/graduation/stats", implemented: true },
-      { name: "In ấn chứng chỉ", href: "/exams/graduation/print", implemented: true },
     ]
   },
   { 
@@ -175,11 +175,8 @@ const navItems: NavItem[] = [
     icon: PencilLine,
     subItems: [
       { name: "Upload dữ liệu", href: "/exams/testing/upload", implemented: true },
-      { name: "Quản lý học viên", href: "/exams/testing/students", implemented: true },
-      { name: "Quản lý mã QR", href: "/exams/testing/qr", implemented: true },
-      { name: "Tick thanh toán", href: "/exams/testing/payments", implemented: true },
-      { name: "Lịch sử quét", href: "/exams/testing/checkin", implemented: true },
-      { name: "In hồ sơ & Thẻ", href: "/exams/testing/print", implemented: true },
+      { name: "Xét điều kiện dự thi", href: "/exams/testing/eligibility", implemented: true },
+      { name: "Danh sách dự thi", href: "/exams/testing/students", implemented: true },
       { name: "Thống kê kết quả", href: "/exams/testing/stats", implemented: true },
     ]
   },

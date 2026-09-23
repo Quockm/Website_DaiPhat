@@ -463,7 +463,7 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
                           <label className="block text-sm font-semibold text-slate-700 mb-1">Hạng GPLX</label>
                           <select value={editForm.HangGPLX || ""} onChange={e => setEditForm({...editForm, HangGPLX: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
                             <option value="">- Chọn -</option>
-                            {['A1', 'A2', 'B1', 'B2', 'C', 'D', 'E', 'F'].map(t => <option key={t} value={t}>{t}</option>)}
+                            {['A1', 'A', 'B-TD', 'B-SS', 'C1', 'C', 'D2', 'D'].map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
                         </div>
                         <div>
@@ -486,7 +486,7 @@ export default function TeachersClient({ initialTeachers, initialTotal, initialP
                           <label className="block text-sm font-semibold text-slate-700 mb-1">Hạng giáo viên (Hạng GVTH)</label>
                           <select value={editForm.HangGiaoVien || editForm.HangGVTH || ""} onChange={e => setEditForm({...editForm, HangGiaoVien: e.target.value, HangGVTH: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white shadow-sm">
                             <option value="">- Chọn -</option>
-                            {['A1', 'A2', 'B1', 'B2', 'C', 'D', 'E', 'F'].map(t => <option key={t} value={t}>{t}</option>)}
+                            {['A1', 'A', 'B-TD', 'B-SS', 'C1', 'C', 'D2', 'D'].map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
                         </div>
                       </div>

@@ -80,8 +80,8 @@ export async function getCoursesForAdmissions(type: 'MOTO' | 'OTO') {
       .filter(r => {
         if (r.type !== type) return false;
         
-        // Exclude courses that are not approved yet or are finished
-        if (r.status === 'Mới tạo' || r.status === 'Chờ duyệt' || r.status === 'Đã bế giảng' || r.status === 'Đã sát hạch') return false;
+        // Exclude courses that are waiting for approval or are finished
+        if (r.status === 'Chờ duyệt' || r.status === 'Đã bế giảng' || r.status === 'Đã sát hạch') return false;
         
         // Exclude if full (only if luuLuong is properly set)
         if (r.luuLuong > 0 && (r.soHocVienDaNhap || 0) >= r.luuLuong) return false;
@@ -117,7 +117,7 @@ export async function getCourseDetailsForAdmissions(maKhoa: string) {
       pool.request()
         .input('MaKhoa', sql.NVarChar, maKhoa)
         .query(`
-          SELECT MaDK as Id, HoTen, NgaySinh, CCCD, SDT as SoDienThoai, NgayNhap, GiaoVien, NguoiNop, TienThu, HinhThucThu, DaNop, ConNo
+          SELECT MaDK as Id, HoTen, NgaySinh, CCCD, SDT as SoDienThoai, NgayNhap, GiaoVien, DauMoi, NguoiNop, TienThu, HinhThucThu, DaNop, ConNo
           FROM App_HocVien_V2
           WHERE MaKhoa = @MaKhoa
           ORDER BY NgayNhap DESC
@@ -153,6 +153,7 @@ export async function getCourseDetailsForAdmissions(maKhoa: string) {
         soDienThoai: r.SoDienThoai,
         ngayNhap: r.NgayNhap,
         giaoVien: r.GiaoVien,
+        dauMoi: r.DauMoi,
         nguoiNop: r.NguoiNop,
         tienThu: r.TienThu,
         hinhThucThu: r.HinhThucThu,
@@ -188,6 +189,7 @@ export async function addStudent(data: {
   hinhThucThu?: string;
   daNop?: number;
   conNo?: number;
+  dauMoi?: string;
 }) {
   try {
     const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
@@ -209,10 +211,11 @@ export async function addStudent(data: {
     request.input('HinhThucThu', sql.NVarChar, data.hinhThucThu || '');
     request.input('DaNop', sql.Int, data.daNop || 0);
     request.input('ConNo', sql.Int, data.conNo || 0);
+    request.input('DauMoi', sql.NVarChar, data.dauMoi || '');
     
     await request.query(`
-      INSERT INTO App_HocVien_V2 (MaDK, MaKhoa, HoTen, NgaySinh, CCCD, SDT, GiaoVien, NguoiNop, TienThu, HinhThucThu, NgayNhap, DaNop, ConNo)
-      VALUES (@MaDK, @MaKhoa, @HoTen, @NgaySinh, @CCCD, @SoDienThoai, @GiaoVien, @NguoiNop, @TienThu, @HinhThucThu, GETDATE(), @DaNop, @ConNo)
+      INSERT INTO App_HocVien_V2 (MaDK, MaKhoa, HoTen, NgaySinh, CCCD, SDT, GiaoVien, DauMoi, NguoiNop, TienThu, HinhThucThu, NgayNhap, DaNop, ConNo)
+      VALUES (@MaDK, @MaKhoa, @HoTen, @NgaySinh, @CCCD, @SoDienThoai, @GiaoVien, @DauMoi, @NguoiNop, @TienThu, @HinhThucThu, GETDATE(), @DaNop, @ConNo)
     `);
     
     // Auto change status if it is currently 'Mới tạo'

@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Package, Search, Plus, Archive, ExternalLink, RotateCcw, Trash2, UserSearch, LogOut } from "lucide-react";
+import { Package, Search, Plus, Archive, ExternalLink, RotateCcw, Trash2, UserSearch, LogOut, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger 
 } from "@/components/ui/dialog";
 import { 
-  getAbsentRecords, addAbsentRecord, checkoutAbsentRecord, returnAbsentRecord, deleteAbsentRecord, getStudentInfoByCCCD, searchStudentsByCCCD 
+  getAbsentRecords, addAbsentRecord, checkoutAbsentRecord, returnAbsentRecord, deleteAbsentRecord, getStudentInfoByCCCD, searchStudentsByCCCD, updateAbsentRecordLocation, updateAbsentRecord
 } from "@/actions/absent/absent.actions";
 import { getStorageLocations } from "@/actions/absent/storage.actions";
 import { getExamSchedules } from "@/actions/exam-schedules.actions";
@@ -17,6 +17,13 @@ interface AbsentInventoryTabProps {
   type: "TN" | "SH";
   title: string;
 }
+
+const HANG_OPTIONS = ["A1", "A2", "B1", "B2", "C", "D", "E", "FC"];
+const RESULT_OPTIONS = [
+  "Vắng LT", "Vắng MP", "Vắng SH", "Vắng ĐT", 
+  "Rớt LT", "Rớt MP", "Rớt SH", "Rớt ĐT", 
+  "Vắng", "Rớt"
+];
 
 export function AbsentInventoryTab({ type, title }: AbsentInventoryTabProps) {
   const [records, setRecords] = useState<any[]>([]);
@@ -31,41 +38,58 @@ export function AbsentInventoryTab({ type, title }: AbsentInventoryTabProps) {
   
   // Add Form State
   const [formData, setFormData] = useState({
-    cccd: "", sbd: "", name: "", hang: "", original_exam_date: "", result: "Vắng", storage_location: "", note: ""
+    cccd: "", sbd: "", name: "", hang: "B2", original_exam_date: "", result: "Vắng LT", storage_location: "", note: "", gv: ""
   });
+  
+  const [editFormData, setEditFormData] = useState({
+    name: "", cccd: "", hang: "", original_exam_date: "", result: "", storage_location: "", note: "", gv: ""
+  });
+  
   const [checkoutDate, setCheckoutDate] = useState("");
   const [returnLocation, setReturnLocation] = useState("");
   
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  
+  const [isUpdateLocationOpen, setIsUpdateLocationOpen] = useState(false);
+
+  const [studentInfo, setStudentInfo] = useState<any>(null);
+  const [searchingStudent, setSearchingStudent] = useState(false);
+
   const [storageLocations, setStorageLocations] = useState<any[]>([]);
   const [showStorageSuggestions, setShowStorageSuggestions] = useState(false);
   const storageWrapperRef = useRef<HTMLDivElement>(null);
-  const returnStorageWrapperRef = useRef<HTMLDivElement>(null);
+
+  const [studentSuggestions, setStudentSuggestions] = useState<any[]>([]);
+  const [showStudentSuggestions, setShowStudentSuggestions] = useState(false);
+  const cccdWrapperRef = useRef<HTMLDivElement>(null);
+
+  const [showUpdateStorageSuggestions, setShowUpdateStorageSuggestions] = useState(false);
+  const updateStorageWrapperRef = useRef<HTMLDivElement>(null);
+
   const [showReturnStorageSuggestions, setShowReturnStorageSuggestions] = useState(false);
-  
-  const [examSchedules, setExamSchedules] = useState<any[]>([]);
+  const returnStorageWrapperRef = useRef<HTMLDivElement>(null);
+
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [showScheduleSuggestions, setShowScheduleSuggestions] = useState(false);
+  const scheduleWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    async function fetchLocations() {
-      const res = await getStorageLocations();
-      if (res.success) setStorageLocations(res.data || []);
-    }
-    async function fetchSchedules() {
-      const res = await getExamSchedules(type);
-      if (res.success) setExamSchedules(res.data || []);
-    }
-    fetchLocations();
-    fetchSchedules();
-    
+    loadData();
+    loadStorageLocations();
+    loadExamSchedules();
+  }, [type]);
+
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
       if (storageWrapperRef.current && !storageWrapperRef.current.contains(event.target as Node)) {
         setShowStorageSuggestions(false);
+      }
+      if (cccdWrapperRef.current && !cccdWrapperRef.current.contains(event.target as Node)) {
+        setShowStudentSuggestions(false);
+      }
+      if (updateStorageWrapperRef.current && !updateStorageWrapperRef.current.contains(event.target as Node)) {
+        setShowUpdateStorageSuggestions(false);
+      }
+      if (scheduleWrapperRef.current && !scheduleWrapperRef.current.contains(event.target as Node)) {
+        setShowScheduleSuggestions(false);
       }
       if (returnStorageWrapperRef.current && !returnStorageWrapperRef.current.contains(event.target as Node)) {
         setShowReturnStorageSuggestions(false);
@@ -77,77 +101,76 @@ export function AbsentInventoryTab({ type, title }: AbsentInventoryTabProps) {
 
   const loadData = async () => {
     setLoading(true);
-    const res = await getAbsentRecords(type, search);
+    const res = await getAbsentRecords(type);
     if (res.success) {
-      setRecords(res.data || []);
-    } else {
-      alert("Lỗi: " + res.error);
+      setRecords(res.data);
     }
     setLoading(false);
   };
 
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      loadData();
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [search, type]);
+  const loadStorageLocations = async () => {
+    const res = await getStorageLocations();
+    if (res.success) setStorageLocations(res.data);
+  };
 
-  const handleAdd = async () => {
-    if (!formData.name) return alert("Vui lòng nhập họ tên!");
-    
+  const loadExamSchedules = async () => {
+    const res = await getExamSchedules();
+    if (res.success) {
+      const futureSchedules = res.data.filter((s: any) => new Date(s.exam_date) >= new Date());
+      setSchedules(futureSchedules);
+    }
+  };
+
+  const handleStudentSearch = async (val: string) => {
+    setFormData({ ...formData, cccd: val });
+    if (val.length >= 3) {
+      setSearchingStudent(true);
+      const res = await searchStudentsByCCCD(val, type);
+      if (res.success && res.data.length > 0) {
+        setStudentSuggestions(res.data);
+        setShowStudentSuggestions(true);
+      } else {
+        setStudentSuggestions([]);
+      }
+      setSearchingStudent(false);
+    } else {
+      setStudentSuggestions([]);
+      setShowStudentSuggestions(false);
+    }
+  };
+
+  const handleSelectStudent = (student: any) => {
+    setFormData({
+      ...formData,
+      cccd: student.cccd,
+      sbd: student.sbd || "",
+      name: student.name || "",
+      hang: student.hang || "B2",
+      original_exam_date: student.original_exam_date || "",
+      result: student.result || "Vắng LT",
+      gv: student.gv || ""
+    });
+    setStudentInfo(student);
+    setShowStudentSuggestions(false);
+  };
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.storage_location) return alert("Vui lòng điền các trường bắt buộc");
     const res = await addAbsentRecord({ ...formData, type });
     if (res.success) {
       setIsAddOpen(false);
-      setFormData({ cccd: "", sbd: "", name: "", hang: "", original_exam_date: "", result: "Vắng", storage_location: "", note: "" });
+      setFormData({ cccd: "", sbd: "", name: "", hang: "B2", original_exam_date: "", result: "Vắng LT", storage_location: "", note: "", gv: "" });
+      setStudentInfo(null);
       loadData();
     } else {
       alert("Lỗi: " + res.error);
     }
   };
 
-  const handleCccdChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setFormData({...formData, cccd: val});
-    
-    const searchVal = val.trim();
-    if (searchVal.length >= 3) {
-      const res = await searchStudentsByCCCD(searchVal, type);
-      if (res.success) {
-        setSuggestions(res.data || []);
-        setShowSuggestions(true);
-      }
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleSelectSuggestion = (student: any) => {
-    let formattedDate: string | null = null;
-    if (student.original_exam_date) {
-      const d = new Date(student.original_exam_date);
-      if (!isNaN(d.getTime())) {
-        formattedDate = d.toLocaleDateString('vi-VN');
-      }
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      cccd: student.cccd,
-      name: student.name || prev.name,
-      sbd: student.sbd || prev.sbd,
-      hang: student.hang || prev.hang,
-      original_exam_date: formattedDate ? formattedDate : prev.original_exam_date,
-      result: student.result === 'RỚT' || student.result === 'HỎNG' || student.result === 'KHÔNG ĐẠT' ? 'Rớt' : 'Vắng'
-    }));
-    setShowSuggestions(false);
-  };
-
   const handleCheckout = async () => {
     if (!selectedRecord) return;
-    if (!checkoutDate) return alert("Vui lòng nhập ngày dự định thi lại!");
-    
+    if (!checkoutDate) return alert("Vui lòng chọn ngày thi mục tiêu!");
     const res = await checkoutAbsentRecord(selectedRecord.id, checkoutDate);
     if (res.success) {
       setIsCheckoutOpen(false);
@@ -161,8 +184,7 @@ export function AbsentInventoryTab({ type, title }: AbsentInventoryTabProps) {
 
   const handleReturn = async () => {
     if (!selectedRecord) return;
-    if (!returnLocation) return alert("Vui lòng nhập vị trí lưu kho mới!");
-    
+    if (!returnLocation) return alert("Vui lòng nhập vị trí lưu kho!");
     const res = await returnAbsentRecord(selectedRecord.id, returnLocation);
     if (res.success) {
       setIsReturnOpen(false);
@@ -175,317 +197,541 @@ export function AbsentInventoryTab({ type, title }: AbsentInventoryTabProps) {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm("Bạn có chắc chắn muốn xoá hồ sơ này khỏi kho?")) {
+    if (window.confirm("Bạn có chắc chắn muốn xoá hồ sơ này?")) {
       const res = await deleteAbsentRecord(id);
       if (res.success) loadData();
       else alert("Lỗi: " + res.error);
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-rose-100 text-rose-600 rounded-lg">
-            <Archive className="w-5 h-5" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-800">Kho lưu trữ - {title}</h2>
-        </div>
-        <div className="flex gap-2">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input 
-              placeholder="Tìm tên, CCCD, Vị trí..." 
-              className="pl-9 w-64"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-indigo-600 hover:bg-indigo-700">
-                <Plus className="w-4 h-4 mr-2" /> Nhập hồ sơ
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[650px] overflow-visible p-8">
-              <DialogHeader>
-                <DialogTitle className="text-2xl font-bold flex items-center gap-2 text-black mb-4">
-                  <Archive className="w-6 h-6 text-indigo-600" />
-                  Nhập hồ sơ mới vào kho
-                </DialogTitle>
-              </DialogHeader>
-              
-              <div className="py-2 space-y-8">
-                {/* Section 1: Thông tin học viên */}
-                <div className="space-y-4">
-                  <h3 className="text-base font-semibold text-slate-800 border-b pb-2 flex items-center gap-2">
-                    <UserSearch className="w-5 h-5 text-slate-500" /> Thông tin học viên
-                  </h3>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-6">
-                    <div className="space-y-2 relative" ref={wrapperRef}>
-                      <label className="text-sm font-medium text-slate-700">CCCD (Gợi ý tự động)</label>
-                      <Input 
-                        value={formData.cccd} 
-                        onChange={handleCccdChange} 
-                        placeholder="Nhập 3+ số CCCD..."
-                        className="h-11 px-4 py-2 font-mono text-sm text-black font-semibold placeholder:text-slate-400"
-                      />
-                      {showSuggestions && suggestions.length > 0 && (
-                        <div className="absolute z-50 w-full bg-white border border-slate-200 rounded-md shadow-lg top-[70px] max-h-60 overflow-y-auto">
-                          {suggestions.map((st, i) => (
-                            <div 
-                              key={i} 
-                              className="px-3 py-2 hover:bg-slate-50 cursor-pointer border-b last:border-0 border-slate-100"
-                              onClick={() => handleSelectSuggestion(st)}
-                            >
-                              <div className="font-semibold text-sm text-slate-800">{st.name}</div>
-                              <div className="text-xs text-slate-500 font-mono">{st.cccd} | Hạng: {st.hang}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Họ và tên *</label>
-                      <Input value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Nguyễn Văn A" className="h-11 px-4 py-2 font-bold text-black placeholder:text-slate-400" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Hạng</label>
-                      <Input value={formData.hang} onChange={(e) => setFormData({...formData, hang: e.target.value})} placeholder="Ví dụ: B2" className="h-11 px-4 py-2 text-black font-semibold placeholder:text-slate-400" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Ngày thi cũ</label>
-                      <Input value={formData.original_exam_date} onChange={(e) => setFormData({...formData, original_exam_date: e.target.value})} placeholder="Ví dụ: 15/08/2026" className="h-11 px-4 py-2 text-black font-semibold placeholder:text-slate-400" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Kết quả</label>
-                      <select 
-                        className="w-full flex h-11 items-center justify-between rounded-md border border-slate-200 bg-white px-4 py-2 text-sm text-black font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                        value={formData.result} 
-                        onChange={(e) => setFormData({...formData, result: e.target.value})}
-                      >
-                        <option value="Vắng">Vắng</option>
-                        <option value="Rớt">Rớt</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
+  const handleUpdateRecord = async () => {
+    if (!selectedRecord) return;
+    if (!editFormData.name) return alert("Vui lòng nhập tên học viên!");
+    if (!editFormData.storage_location) return alert("Vui lòng nhập vị trí lưu kho!");
+    
+    const res = await updateAbsentRecord(selectedRecord.id, editFormData);
+    if (res.success) {
+      setIsUpdateLocationOpen(false);
+      setSelectedRecord(null);
+      loadData();
+    } else {
+      alert("Lỗi: " + res.error);
+    }
+  };
 
-                {/* Section 2: Thông lưu kho */}
-                <div className="space-y-4">
-                  <h3 className="text-base font-semibold text-slate-800 border-b pb-2 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-slate-500" /> Thông tin lưu kho
-                  </h3>
-                  <div className="grid grid-cols-1 gap-6">
-                    <div className="space-y-2 relative" ref={storageWrapperRef}>
-                      <label className="text-sm font-medium text-slate-700">Vị trí cất hồ sơ (Gõ tên hoặc mã) *</label>
-                      <Input 
-                        className="w-full flex h-11 items-center justify-between rounded-md border border-slate-200 bg-white px-4 py-2 text-sm text-black font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-400"
-                        value={formData.storage_location} 
-                        onChange={(e) => {
-                          setFormData({...formData, storage_location: e.target.value});
-                          setShowStorageSuggestions(true);
-                        }}
-                        onFocus={() => setShowStorageSuggestions(true)}
-                        placeholder="Ví dụ: K1, Tủ A..."
-                      />
-                      {showStorageSuggestions && storageLocations.filter(l => l.name.toLowerCase().includes(formData.storage_location.toLowerCase()) || (l.code && l.code.toLowerCase().includes(formData.storage_location.toLowerCase()))).length > 0 && (
-                        <div className="absolute z-50 w-full bg-white border border-slate-200 rounded-md shadow-lg top-[70px] max-h-48 overflow-y-auto">
-                          {storageLocations.filter(l => l.name.toLowerCase().includes(formData.storage_location.toLowerCase()) || (l.code && l.code.toLowerCase().includes(formData.storage_location.toLowerCase()))).map((loc) => (
-                            <div 
-                              key={loc.id} 
-                              className="px-3 py-2 hover:bg-slate-50 cursor-pointer border-b last:border-0 border-slate-100 flex justify-between"
-                              onClick={() => {
-                                setFormData({...formData, storage_location: loc.name});
-                                setShowStorageSuggestions(false);
-                              }}
-                            >
-                              <span className="font-bold text-slate-800 text-sm">{loc.name}</span>
-                              {loc.code && <span className="font-mono text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{loc.code}</span>}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">Ghi chú (nếu có)</label>
-                      <Input value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} placeholder="Hồ sơ còn thiếu giấy khám sức khoẻ..." className="h-11 px-4 py-2 text-black placeholder:text-slate-400" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddOpen(false)}>Huỷ</Button>
-                <Button onClick={handleAdd} className="bg-indigo-600 hover:bg-indigo-700">Lưu hồ sơ</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+  const filteredRecords = records.filter(r => 
+    r.name?.toLowerCase().includes(search.toLowerCase()) || 
+    r.cccd?.toLowerCase().includes(search.toLowerCase()) ||
+    r.storage_location?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* Search & Actions */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+        <div className="relative w-full sm:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input 
+            placeholder="Tìm theo tên, CCCD, Vị trí..." 
+            className="pl-9 h-11 border-slate-200 focus:border-indigo-500 bg-slate-50 focus:bg-white transition-colors"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
+        <Button onClick={() => setIsAddOpen(true)} className="w-full sm:w-auto h-11 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-md shadow-indigo-200 rounded-lg">
+          <Plus className="w-4 h-4 mr-2" />
+          Lưu Hồ Sơ Mới
+        </Button>
       </div>
 
+      {/* Main Data Table */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="text-xs text-slate-600 uppercase bg-slate-50 border-b border-slate-100">
+            <thead className="text-xs text-slate-500 uppercase bg-slate-50/80 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3">ID</th>
-                <th className="px-4 py-3">Học viên</th>
-                <th className="px-4 py-3">Kỳ thi cũ</th>
-                <th className="px-4 py-3 text-center">Tình trạng</th>
-                <th className="px-4 py-3">Vị trí lưu trữ</th>
-                <th className="px-4 py-3 text-center">Trạng thái kho</th>
-                <th className="px-4 py-3 text-center">Hành động</th>
+                <th className="px-5 py-4 font-semibold">Học viên</th>
+                <th className="px-5 py-4 font-semibold">Kỳ thi cũ</th>
+                <th className="px-5 py-4 font-semibold">Tình trạng</th>
+                <th className="px-5 py-4 font-semibold text-center">Trạng thái kho</th>
+                <th className="px-5 py-4 font-semibold">Vị trí lưu trữ</th>
+                <th className="px-5 py-4 font-semibold">Ngày nhận/xuất</th>
+                <th className="px-5 py-4 font-semibold text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-8 text-slate-500">Đang tải dữ liệu...</td></tr>
-              ) : records.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-8 text-slate-500">Kho trống, không có hồ sơ nào.</td></tr>
+                <tr>
+                  <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                      <p>Đang tải dữ liệu {title}...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredRecords.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
+                    <Package className="w-10 h-10 mx-auto text-slate-300 mb-3" />
+                    <p>Không có hồ sơ nào.</p>
+                  </td>
+                </tr>
               ) : (
-                records.map((r) => {
-                  const isStored = r.status === 'Đang lưu kho';
-                  return (
-                    <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-slate-500">#{r.id}</td>
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-slate-800">{r.name}</div>
-                        <div className="text-xs text-slate-500">CCCD: {r.cccd || '---'} | Hạng: <span className="font-semibold text-indigo-600">{r.hang || '---'}</span></div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {r.original_exam_date || '---'}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${r.result === 'Rớt' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
-                          {r.result}
+                filteredRecords.map((r) => (
+                  <tr key={r.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="px-5 py-4">
+                      <div className="font-bold text-slate-800">{r.name}</div>
+                      <div className="text-xs text-slate-500 font-mono mt-0.5">{r.cccd || '---'} | Hạng: <span className="font-semibold text-slate-700">{r.hang}</span></div>
+                    </td>
+                    <td className="px-5 py-4 text-slate-900 font-semibold">
+                      {r.original_exam_date ? (isNaN(new Date(r.original_exam_date).getTime()) ? r.original_exam_date : new Date(r.original_exam_date).toLocaleDateString("vi-VN")) : "---"}
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="px-2.5 py-1 bg-rose-50 text-rose-700 font-semibold rounded-md text-xs border border-rose-100">
+                        {r.result || "Vắng/Rớt"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      {r.status === "Đang lưu kho" ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 font-bold rounded-lg text-xs border border-emerald-200 shadow-sm">
+                          <Archive className="w-3.5 h-3.5" /> Lưu kho
                         </span>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-700">
-                        {r.storage_location || '---'}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {isStored ? (
-                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            Đang lưu kho
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 font-bold rounded-lg text-xs border border-amber-200 shadow-sm">
+                          <ExternalLink className="w-3.5 h-3.5" /> Đã xuất kho
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      {r.status === "Đang lưu kho" ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+                            {r.storage_location}
                           </span>
-                        ) : (
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                              Đã xuất kho
-                            </span>
-                            {r.target_exam_date && (
-                              <span className="text-xs text-slate-500">Cho ngày: {r.target_exam_date}</span>
-                            )}
-                            {r.checkout_date && (
-                              <span className="text-xs text-slate-400">({new Date(r.checkout_date).toLocaleDateString('vi-VN')})</span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-2">
-                          {isStored ? (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-8 text-blue-500 hover:bg-blue-50 hover:text-blue-700 font-medium" 
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-xs italic">Không có trong kho</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="text-xs text-slate-500">
+                        <span className="font-semibold text-slate-700">Nhận:</span> {new Date(r.created_at).toLocaleDateString("vi-VN")}
+                      </div>
+                      {r.checkout_date && (
+                        <div className="text-xs text-slate-500 mt-1">
+                          <span className="font-semibold text-amber-700">Xuất:</span> {new Date(r.checkout_date).toLocaleDateString("vi-VN")}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {r.status === "Đang lưu kho" ? (
+                          <>
+                            <button 
                               onClick={() => {
                                 setSelectedRecord(r);
-                                setIsCheckoutOpen(true);
+                                setEditFormData({
+                                  name: r.name || "",
+                                  cccd: r.cccd || "",
+                                  hang: r.hang || "B2",
+                                  original_exam_date: r.original_exam_date || "",
+                                  result: r.result || "Vắng LT",
+                                  storage_location: r.storage_location || "",
+                                  note: r.note || "",
+                                  gv: r.gv || ""
+                                });
+                                setIsUpdateLocationOpen(true);
                               }}
+                              className="text-slate-400 hover:text-indigo-600 transition-colors"
+                              title="Chỉnh sửa thông tin hồ sơ"
                             >
-                              <LogOut className="w-4 h-4 mr-1" />
-                              Đã lấy
-                            </Button>
-                          ) : (
-                            <Button 
-                              variant="outline" size="sm" 
-                              className="h-8 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 border-emerald-200"
-                              onClick={() => { setSelectedRecord(r); setReturnLocation(r.storage_location); setIsReturnOpen(true); }}
-                            >
-                              <RotateCcw className="w-3 h-3 mr-1" /> Nhập lại kho
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-700" onClick={() => handleDelete(r.id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => { setSelectedRecord(r); setIsCheckoutOpen(true); }} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Xuất kho">
+                              <LogOut className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => { setSelectedRecord(r); setIsReturnOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Nhập lại kho">
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button onClick={() => handleDelete(r.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Xoá hồ sơ">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* Add New Record Dialog */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="sm:max-w-[650px] p-0 border-0 shadow-2xl !rounded-2xl overflow-hidden !gap-0">
+          <div className="bg-gradient-to-r from-indigo-600 to-blue-600 p-6 text-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3 text-2xl font-bold tracking-tight text-white">
+                <div className="p-2.5 bg-white/20 rounded-xl shadow-inner">
+                  <Plus className="w-6 h-6 text-white" />
+                </div>
+                Tiếp nhận hồ sơ Vắng/Rớt
+              </DialogTitle>
+            </DialogHeader>
+            <p className="mt-2 text-indigo-100 text-sm font-medium">Nhập CCCD để tự động lấy thông tin từ kỳ thi cũ, hoặc điền thủ công.</p>
+          </div>
+          
+          <form onSubmit={handleAddSubmit} className="p-6 bg-slate-50 space-y-6">
+            <div className="grid grid-cols-12 gap-5">
+              {/* Left Col */}
+              <div className="col-span-12 sm:col-span-5 space-y-5">
+                <div className="space-y-1.5 relative" ref={cccdWrapperRef}>
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                    CCCD Học viên <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <UserSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Input 
+                      required 
+                      className="pl-9 h-11 font-mono border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
+                      value={formData.cccd} 
+                      onChange={(e) => handleStudentSearch(e.target.value)}
+                      onFocus={() => { if(studentSuggestions.length > 0) setShowStudentSuggestions(true) }}
+                      placeholder="Nhập số CCCD..."
+                    />
+                    {showStudentSuggestions && studentSuggestions.length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-64 overflow-y-auto divide-y divide-slate-100">
+                        {studentSuggestions.map((s, idx) => (
+                          <div 
+                            key={idx} 
+                            className="px-4 py-3 hover:bg-indigo-50 cursor-pointer transition-colors"
+                            onClick={() => handleSelectStudent(s)}
+                          >
+                            <div className="font-bold text-slate-800">{s.name}</div>
+                            <div className="text-xs text-slate-500 font-mono mt-0.5">
+                              {s.cccd} | Hạng: {s.hang}
+                              {s.gv && ` | GV: ${s.gv}`}
+                            </div>
+                            {s.original_exam_date && (
+                              <div className="text-xs text-indigo-600 mt-0.5 font-medium">
+                                Thi: {new Date(s.original_exam_date).toLocaleDateString("vi-VN")} - KQ: {s.result}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">Họ và tên *</label>
+                  <Input required className="h-11 border-slate-300" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700">Hạng</label>
+                    <select 
+                      className="w-full h-11 px-3 border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm text-slate-900 font-semibold"
+                      value={formData.hang} 
+                      onChange={(e) => setFormData({...formData, hang: e.target.value})}
+                    >
+                      {HANG_OPTIONS.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-bold text-slate-700">Tình trạng</label>
+                    <select 
+                      className="w-full h-11 px-3 border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm text-slate-900 font-semibold"
+                      value={formData.result} 
+                      onChange={(e) => setFormData({...formData, result: e.target.value})}
+                    >
+                      {RESULT_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Col */}
+              <div className="col-span-12 sm:col-span-7 bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5">
+                
+                <div className="space-y-1.5 relative" ref={storageWrapperRef}>
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                    Vị trí lưu kho <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Input 
+                      required 
+                      className="h-11 font-bold border-indigo-200 focus:border-indigo-500 bg-indigo-50/30"
+                      value={formData.storage_location} 
+                      onChange={(e) => {
+                        setFormData({...formData, storage_location: e.target.value});
+                        setShowStorageSuggestions(true);
+                      }}
+                      onFocus={() => setShowStorageSuggestions(true)}
+                      placeholder="Tên/Mã ngăn xếp..."
+                    />
+                    {showStorageSuggestions && formData.storage_location.trim().length > 0 && storageLocations.filter(l => l.name.toLowerCase().includes(formData.storage_location.toLowerCase()) || (l.code && l.code.toLowerCase().includes(formData.storage_location.toLowerCase()))).length > 0 && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                        {storageLocations.filter(l => l.name.toLowerCase().includes(formData.storage_location.toLowerCase()) || (l.code && l.code.toLowerCase().includes(formData.storage_location.toLowerCase()))).map((loc) => (
+                          <div 
+                            key={loc.id} 
+                            className="px-4 py-2.5 hover:bg-indigo-50 cursor-pointer flex justify-between items-center"
+                            onClick={() => {
+                              setFormData({...formData, storage_location: loc.name});
+                              setShowStorageSuggestions(false);
+                            }}
+                          >
+                            <span className="font-semibold text-slate-700">{loc.name}</span>
+                            {loc.code && <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{loc.code}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">Ngày thi cũ (Nếu có)</label>
+                  <Input type="date" className="h-11 border-slate-300 text-slate-900 font-semibold" value={formData.original_exam_date} onChange={(e) => setFormData({...formData, original_exam_date: e.target.value})} />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-sm font-bold text-slate-700">Ghi chú thêm</label>
+                  <Input className="h-11 border-slate-300" placeholder="VD: Bị thiếu hồ sơ gốc..." value={formData.note} onChange={(e) => setFormData({...formData, note: e.target.value})} />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 flex justify-end gap-3 border-t border-slate-200">
+              <Button type="button" variant="ghost" className="h-11 px-6 font-semibold" onClick={() => setIsAddOpen(false)}>Huỷ</Button>
+              <Button type="submit" className="h-11 px-8 bg-indigo-600 hover:bg-indigo-700 font-bold shadow-md shadow-indigo-200">
+                Tiếp Nhận Hồ Sơ
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Record Dialog */}
+      <Dialog open={isUpdateLocationOpen} onOpenChange={setIsUpdateLocationOpen}>
+        <DialogContent className="sm:max-w-[600px] p-0 border-0 shadow-2xl !rounded-2xl !bg-transparent !gap-0">
+          <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 text-white rounded-t-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3 text-2xl font-bold tracking-tight text-white">
+                <div className="p-2.5 bg-white/20 rounded-xl shadow-inner border border-white/10">
+                  <Edit2 className="w-6 h-6 text-white" />
+                </div>
+                Chỉnh sửa thông tin hồ sơ
+              </DialogTitle>
+            </DialogHeader>
+            <p className="mt-2 text-indigo-100 text-sm font-medium">
+              Cập nhật lại các thông tin của học viên, kỳ thi cũ hoặc vị trí lưu kho.
+            </p>
+          </div>
+          
+          <div className="p-6 space-y-4 bg-white relative z-10">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">Họ và tên *</label>
+                <Input 
+                  readOnly
+                  value={editFormData.name} 
+                  onChange={(e) => setEditFormData({...editFormData, name: e.target.value})} 
+                  className="h-11 border-slate-200 bg-slate-100 text-slate-500 font-medium cursor-not-allowed"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">CCCD</label>
+                <Input 
+                  readOnly
+                  value={editFormData.cccd} 
+                  onChange={(e) => setEditFormData({...editFormData, cccd: e.target.value})} 
+                  className="h-11 border-slate-200 bg-slate-100 text-slate-500 font-mono cursor-not-allowed"
+                />
+              </div>
+              
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">Hạng</label>
+                <select 
+                  className="w-full h-11 px-3 border border-slate-200 rounded-md focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 text-sm transition-colors text-slate-900 font-semibold"
+                  value={editFormData.hang} 
+                  onChange={(e) => setEditFormData({...editFormData, hang: e.target.value})} 
+                >
+                  {HANG_OPTIONS.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700">Kỳ thi cũ (Ngày thi)</label>
+                <Input 
+                  type="date"
+                  value={(() => {
+                    if (!editFormData.original_exam_date) return "";
+                    const d = new Date(editFormData.original_exam_date);
+                    return isNaN(d.getTime()) ? "" : d.toISOString().split('T')[0];
+                  })()} 
+                  onChange={(e) => setEditFormData({...editFormData, original_exam_date: e.target.value})} 
+                  className="h-11 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 text-slate-900 font-semibold"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                  Tình trạng (Vắng / Rớt)
+                </label>
+                <select 
+                  className="w-full h-11 px-3 border border-slate-200 rounded-md focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 text-sm font-semibold transition-colors text-slate-900"
+                  value={editFormData.result} 
+                  onChange={(e) => setEditFormData({...editFormData, result: e.target.value})} 
+                >
+                  {/* Append dynamically if not in the list */}
+                  {!RESULT_OPTIONS.includes(editFormData.result) && editFormData.result && (
+                    <option value={editFormData.result}>{editFormData.result}</option>
+                  )}
+                  {RESULT_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 relative" ref={updateStorageWrapperRef}>
+              <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                Vị trí ngăn xếp mới <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Input 
+                  className="w-full h-11 px-4 font-bold bg-white border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 transition-colors placeholder:text-slate-400 placeholder:font-normal rounded-lg"
+                  value={editFormData.storage_location} 
+                  onChange={(e) => {
+                    setEditFormData({...editFormData, storage_location: e.target.value});
+                    setShowUpdateStorageSuggestions(true);
+                  }}
+                  onFocus={() => setShowUpdateStorageSuggestions(true)}
+                  placeholder="Gõ tên hoặc mã vị trí (VD: K1, Tủ A...)"
+                />
+                
+                {showUpdateStorageSuggestions && editFormData.storage_location.trim().length > 0 && storageLocations.filter(l => l.name.toLowerCase().includes(editFormData.storage_location.toLowerCase()) || (l.code && l.code.toLowerCase().includes(editFormData.storage_location.toLowerCase()))).length > 0 && (
+                  <div className="absolute z-50 w-full bottom-full mb-2 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-56 overflow-y-auto divide-y divide-slate-100 flex flex-col-reverse">
+                    <div className="flex flex-col">
+                      {storageLocations.filter(l => l.name.toLowerCase().includes(editFormData.storage_location.toLowerCase()) || (l.code && l.code.toLowerCase().includes(editFormData.storage_location.toLowerCase()))).map((loc) => (
+                        <div 
+                          key={loc.id} 
+                          className="px-5 py-3 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition-colors group"
+                          onClick={() => {
+                            setEditFormData({...editFormData, storage_location: loc.name});
+                            setShowUpdateStorageSuggestions(false);
+                          }}
+                        >
+                          <span className="font-bold text-slate-700 group-hover:text-indigo-700">{loc.name}</span>
+                          {loc.code && <span className="font-mono text-xs text-indigo-700 font-semibold bg-indigo-100 px-2.5 py-1 rounded-md">{loc.code}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">Ghi chú</label>
+              <Input 
+                value={editFormData.note} 
+                onChange={(e) => setEditFormData({...editFormData, note: e.target.value})} 
+                className="h-11 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20"
+              />
+            </div>
+          </div>
+          
+          {/* Footer Action */}
+          <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 rounded-b-2xl relative z-10">
+            <Button variant="ghost" className="h-11 px-6 font-semibold text-slate-600 hover:bg-slate-200 hover:text-slate-900 rounded-xl" onClick={() => setIsUpdateLocationOpen(false)}>
+              Huỷ bỏ
+            </Button>
+            <Button 
+              onClick={handleUpdateRecord} 
+              className="h-11 px-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-200 transition-colors"
+            >
+              Lưu thay đổi
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Checkout Dialog */}
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Xuất hồ sơ đi thi lại</DialogTitle>
+            <DialogTitle>Xuất kho hồ sơ</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <p className="text-sm text-slate-600">
-              Bạn đang xuất hồ sơ của học viên <strong className="text-slate-900">{selectedRecord?.name}</strong>.
-            </p>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Chọn lịch thi sắp tới (Ngày thi lại) *</label>
-              <select 
-                className="w-full flex h-11 items-center justify-between rounded-md border border-slate-200 bg-white px-4 py-2 text-sm text-black font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                value={checkoutDate} 
-                onChange={(e) => setCheckoutDate(e.target.value)}
-              >
-                <option value="">-- Chọn lịch thi --</option>
-                {examSchedules.map(sch => {
-                  const d = new Date(sch.exam_date);
-                  const dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('vi-VN') : sch.exam_date;
-                  return (
-                    <option key={sch.id} value={dateStr}>
-                      {dateStr} {sch.title ? `- ${sch.title}` : ''}
-                    </option>
-                  );
-                })}
-              </select>
+            <p className="text-sm text-slate-600">Bạn đang xuất kho hồ sơ của học viên <strong>{selectedRecord?.name}</strong>.</p>
+            <div className="space-y-2 relative" ref={scheduleWrapperRef}>
+              <label className="text-sm font-medium">Chuyển sang kỳ thi mới (Ngày thi):</label>
+              <Input 
+                value={checkoutDate}
+                onChange={(e) => {
+                  setCheckoutDate(e.target.value);
+                  setShowScheduleSuggestions(true);
+                }}
+                onFocus={() => setShowScheduleSuggestions(true)}
+                placeholder="Chọn hoặc nhập ngày thi (YYYY-MM-DD)"
+              />
+              {showScheduleSuggestions && schedules.filter(s => s.exam_date.includes(checkoutDate)).length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {schedules.filter(s => s.exam_date.includes(checkoutDate)).map((s, idx) => (
+                    <div 
+                      key={idx} 
+                      className="px-3 py-2 hover:bg-slate-100 cursor-pointer text-sm"
+                      onClick={() => {
+                        setCheckoutDate(s.exam_date.split('T')[0]);
+                        setShowScheduleSuggestions(false);
+                      }}
+                    >
+                      <span className="font-semibold text-indigo-600">{new Date(s.exam_date).toLocaleDateString('vi-VN')}</span>
+                      <span className="ml-2 text-slate-500 truncate inline-block align-bottom max-w-[200px]">{s.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCheckoutOpen(false)}>Huỷ</Button>
-            <Button onClick={handleCheckout} className="bg-amber-600 hover:bg-amber-700">Xác nhận xuất kho</Button>
+            <Button onClick={handleCheckout} className="bg-amber-600 hover:bg-amber-700">Xác nhận xuất</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Return Dialog */}
       <Dialog open={isReturnOpen} onOpenChange={setIsReturnOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Nhập lại hồ sơ vào kho</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <p className="text-sm text-slate-600">
-              Đưa hồ sơ của <strong className="text-slate-900">{selectedRecord?.name}</strong> trở lại kho lưu trữ.
-            </p>
+            <p className="text-sm text-slate-600">Bạn đang nhập lại hồ sơ của học viên <strong>{selectedRecord?.name}</strong>.</p>
             <div className="space-y-2 relative" ref={returnStorageWrapperRef}>
-              <label className="text-sm font-medium">Cất vào ngăn xếp / Vị trí nào (Gõ tên hoặc mã)? *</label>
+              <label className="text-sm font-medium">Vị trí ngăn xếp mới:</label>
               <Input 
-                className="w-full flex h-11 items-center justify-between rounded-md border border-slate-200 bg-white px-4 py-2 text-sm text-black font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-400"
-                value={returnLocation} 
+                value={returnLocation}
                 onChange={(e) => {
                   setReturnLocation(e.target.value);
                   setShowReturnStorageSuggestions(true);
                 }}
                 onFocus={() => setShowReturnStorageSuggestions(true)}
-                placeholder="Ví dụ: K1, Tủ A..."
+                placeholder="Tên/Mã ngăn xếp..."
               />
-              {showReturnStorageSuggestions && storageLocations.filter(l => l.name.toLowerCase().includes(returnLocation.toLowerCase()) || (l.code && l.code.toLowerCase().includes(returnLocation.toLowerCase()))).length > 0 && (
-                <div className="absolute z-50 w-full bg-white border border-slate-200 rounded-md shadow-lg top-[70px] max-h-48 overflow-y-auto">
+              {showReturnStorageSuggestions && returnLocation.trim().length > 0 && storageLocations.filter(l => l.name.toLowerCase().includes(returnLocation.toLowerCase()) || (l.code && l.code.toLowerCase().includes(returnLocation.toLowerCase()))).length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
                   {storageLocations.filter(l => l.name.toLowerCase().includes(returnLocation.toLowerCase()) || (l.code && l.code.toLowerCase().includes(returnLocation.toLowerCase()))).map((loc) => (
                     <div 
                       key={loc.id} 
-                      className="px-3 py-2 hover:bg-slate-50 cursor-pointer border-b last:border-0 border-slate-100 flex justify-between"
+                      className="px-3 py-2 hover:bg-slate-100 cursor-pointer flex justify-between items-center"
                       onClick={() => {
                         setReturnLocation(loc.name);
                         setShowReturnStorageSuggestions(false);

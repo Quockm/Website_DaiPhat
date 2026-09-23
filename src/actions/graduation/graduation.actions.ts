@@ -6,15 +6,19 @@ import sql from "mssql";
 export async function getGraduationStudents() {
   try {
     const pool = await getDbConnection("DP_SH_System");
+    const defaultDb = process.env.SQL_DATABASE || 'dp_system';
     const result = await pool.request().query(`
       SELECT 
         g.id, g.cccd, g.stt, g.sbd, g.name, g.dob, g.school, g.hang, g.exam_date,
         g.files_data, g.has_5_pdf_lt, g.has_file_dat, g.has_file_mp, g.has_xang_dau,
         g.diem_luat, g.diem_mo_phong, g.diem_hinh, g.diem_duong, g.kq_final, g.is_retake,
+        g.file_completion_date,
+        h.MaKhoa as khoa,
         CAST(CASE WHEN EXISTS (SELECT 1 FROM DP_SH_System.dbo.print_logs WHERE entity_type = 'STUDENT' AND entity_id = g.cccd AND document_type = 'HOP_DONG') THEN 1 ELSE 0 END AS BIT) as in_hop_dong,
         CAST(CASE WHEN EXISTS (SELECT 1 FROM DP_SH_System.dbo.print_logs WHERE entity_type = 'STUDENT' AND entity_id = g.cccd AND document_type = 'THANH_LY') THEN 1 ELSE 0 END AS BIT) as in_thanh_ly,
         CAST(CASE WHEN EXISTS (SELECT 1 FROM DP_SH_System.dbo.print_logs WHERE entity_type = 'STUDENT' AND entity_id = g.cccd AND document_type = 'PHIEU_THU') THEN 1 ELSE 0 END AS BIT) as in_phieu_thu
       FROM DP_SH_System.dbo.graduation_students g
+      LEFT JOIN ${defaultDb}.dbo.App_HocVien_V2 h ON g.cccd = h.CCCD
       ORDER BY TRY_CAST(g.stt AS INT) ASC, g.id DESC
     `);
     
@@ -159,6 +163,49 @@ export async function updateScores(cccd: string, data: any) {
     return { success: true };
   } catch (error: any) {
     console.error("Lỗi khi cập nhật điểm:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function assignExamDates(cccds: string[], examDate: string) {
+  try {
+    const pool = await getDbConnection("DP_SH_System");
+    
+    // We update all CCCDs in one go, or iteratively. 
+    // Mssql has a limit on parameters, but if cccds is not huge, we can use an IN clause or iterate.
+    // Iterating is safe for now.
+    for (const cccd of cccds) {
+      const req = pool.request();
+      req.input('cccd', sql.VarChar, cccd);
+      req.input('exam_date', sql.VarChar, examDate);
+      await req.query(`
+        UPDATE graduation_students 
+        SET exam_date = @exam_date, updated_at = GETDATE()
+        WHERE cccd = @cccd
+      `);
+    }
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error("Lỗi khi xếp lịch thi:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function unassignExamDate(cccd: string) {
+  try {
+    const pool = await getDbConnection("DP_SH_System");
+    const req = pool.request();
+    req.input('cccd', sql.VarChar, cccd);
+    await req.query(`
+      UPDATE graduation_students 
+      SET exam_date = NULL, updated_at = GETDATE()
+      WHERE cccd = @cccd
+    `);
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error("Lỗi khi hủy lịch thi:", error);
     return { success: false, error: error.message };
   }
 }

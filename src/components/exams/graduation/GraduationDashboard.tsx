@@ -8,8 +8,6 @@ import { GraduationEligibilityTab } from "./GraduationEligibilityTab";
 import { GraduationStudentsTab } from "./GraduationStudentsTab";
 import { GraduationScoresTab } from "./GraduationScoresTab";
 import { GraduationStatsTab } from "./GraduationStatsTab";
-import { GraduationPrintTab } from "./GraduationPrintTab";
-
 export default function GraduationDashboard() {
   const [activeTab, setActiveTab] = useState("data");
 
@@ -33,7 +31,7 @@ export default function GraduationDashboard() {
           <TabsTrigger value="data" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm text-slate-600 rounded-lg px-6 py-2.5 font-semibold transition-all">Dữ liệu & Cấu hình</TabsTrigger>
           <TabsTrigger value="eligibility" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm text-slate-600 rounded-lg px-6 py-2.5 font-semibold transition-all">Xét Điều Kiện</TabsTrigger>
           <TabsTrigger value="scores" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm text-slate-600 rounded-lg px-6 py-2.5 font-semibold transition-all">Điểm thi & Kết quả</TabsTrigger>
-          <TabsTrigger value="reports" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm text-slate-600 rounded-lg px-6 py-2.5 font-semibold transition-all">Báo cáo & In ấn</TabsTrigger>
+          <TabsTrigger value="reports" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm text-slate-600 rounded-lg px-6 py-2.5 font-semibold transition-all">Thống kê & Báo cáo</TabsTrigger>
         </TabsList>
 
         <Card className="border-0 shadow-xl bg-white/70 backdrop-blur-xl ring-1 ring-slate-900/5 rounded-2xl overflow-hidden min-h-[600px]">
@@ -52,8 +50,7 @@ export default function GraduationDashboard() {
             </TabsContent>
             
             <TabsContent value="reports" className="mt-0 outline-none space-y-12">
-              <GraduationPrintTab />
-              <div className="border-t border-slate-200 pt-8"><GraduationStatsTab /></div>
+              <GraduationStatsTab />
             </TabsContent>
           </CardContent>
         </Card>

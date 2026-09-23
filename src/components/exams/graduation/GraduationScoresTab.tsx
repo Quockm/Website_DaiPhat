@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Edit3, Check, Save } from "lucide-react";
+import { Edit3, Check, Save, CheckCircle2, FileSpreadsheet, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getGraduationStudents, updateScores } from "@/actions/graduation/graduation.actions";
@@ -71,7 +71,7 @@ export function GraduationScoresTab() {
             <thead className="text-xs text-slate-600 uppercase bg-slate-100 sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="px-4 py-3 w-12 text-center">STT</th>
-                <th className="px-4 py-3">Học viên / SBD</th>
+                <th className="px-4 py-3">Học viên / Khóa</th>
                 <th className="px-4 py-3 text-center">Điểm Luật</th>
                 <th className="px-4 py-3 text-center">Điểm Mô phỏng</th>
                 <th className="px-4 py-3 text-center">Điểm Hình</th>
@@ -88,7 +88,8 @@ export function GraduationScoresTab() {
               ) : (
                 students.map((st, i) => {
                   const isEditing = editingCccd === st.cccd;
-                  const isEligible = st.has_5_pdf_lt && st.has_file_dat && st.has_file_mp;
+                  const isDateValid = !st.exam_date || !st.file_completion_date || st.file_completion_date <= st.exam_date;
+                  const isEligible = st.has_5_pdf_lt && st.has_file_dat && st.has_file_mp && isDateValid;
                   
                   return (
                     <tr key={st.cccd} className={`hover:bg-slate-50/50 transition-colors ${!isEligible ? 'opacity-60 bg-slate-50' : ''}`}>
@@ -96,9 +97,13 @@ export function GraduationScoresTab() {
                       <td className="px-4 py-3">
                         <div className="font-bold text-slate-800 flex items-center gap-2">
                           {st.name} 
-                          {!isEligible && <span className="text-xs bg-red-100 text-red-600 px-1 rounded uppercase">Chưa đủ ĐK</span>}
+                          {!isEligible ? (
+                            <span className="text-xs bg-red-100 text-red-600 px-1 rounded uppercase">Chưa đủ ĐK</span>
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" title="Đủ điều kiện" />
+                          )}
                         </div>
-                        <div className="text-xs text-slate-500 mt-1">SBD: {st.sbd || 'N/A'} | {st.hang}</div>
+                        <div className="text-xs text-slate-500 mt-1">Khóa: {st.khoa || 'N/A'} | {st.hang}</div>
                       </td>
                       
                       {/* Cột Điểm Luật */}

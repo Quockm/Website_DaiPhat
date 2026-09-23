@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { addStudent, getCourseDetailsForAdmissions } from "@/actions/admissions";
 import { Loader2, User } from "lucide-react";
 import { useRouter } from "next/navigation";
+import DauMoiManagerDialog from "./DauMoiManagerDialog";
+import { getDauMois, DauMoi } from "@/actions/daumoi";
 
 type Course = {
   id: string;
@@ -25,8 +27,18 @@ export default function MotoAdmissionsClient({ initialCourses }: { initialCourse
   const [courseDetails, setCourseDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [trungTamFilter, setTrungTamFilter] = useState("Đại Phát");
+  const [daumois, setDaumois] = useState<DauMoi[]>([]);
   
   const router = useRouter();
+
+  const fetchDauMoiList = async () => {
+    const list = await getDauMois();
+    setDaumois(list);
+  };
+
+  useEffect(() => {
+    fetchDauMoiList();
+  }, []);
 
   useEffect(() => {
     if (selectedCourse) {
@@ -56,18 +68,21 @@ export default function MotoAdmissionsClient({ initialCourses }: { initialCourse
             Nhập hồ sơ học viên mới vào các khóa học Mô tô chưa đủ chỉ tiêu. 
           </p>
         </div>
-        <Select value={trungTamFilter} onValueChange={(val) => {
-          setTrungTamFilter(val);
-          setSelectedCourse(""); // Clear selected course when switching center
-        }}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Chọn Trung tâm" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Đại Phát">Đại Phát</SelectItem>
-            <SelectItem value="Tiến Thành">Tiến Thành</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col items-end gap-3">
+          <DauMoiManagerDialog onUpdate={fetchDauMoiList} />
+          <Select value={trungTamFilter} onValueChange={(val) => {
+            setTrungTamFilter(val);
+            setSelectedCourse(""); // Clear selected course when switching center
+          }}>
+            <SelectTrigger className="w-[180px] bg-white">
+              <SelectValue placeholder="Chọn Trung tâm" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Đại Phát">Trung tâm Đại Phát</SelectItem>
+              <SelectItem value="Tiến Thành">Trung tâm Tiến Thành</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="flex flex-col gap-6">
@@ -231,6 +246,7 @@ export default function MotoAdmissionsClient({ initialCourses }: { initialCourse
                                     getCourseDetailsForAdmissions(selectedCourse).then(setCourseDetails);
                                     router.refresh();
                                   }} 
+                                  daumoiList={daumois}
                                 />
                               </div>
                             </div>
@@ -249,7 +265,7 @@ export default function MotoAdmissionsClient({ initialCourses }: { initialCourse
   );
 }
 
-function EmptySlotForm({ maKhoa, feeNorm, onSuccess }: any) {
+function EmptySlotForm({ maKhoa, feeNorm, onSuccess, daumoiList }: any) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     hoTen: '', ngaySinh: '', cccd: '', soDienThoai: '', nguoiNop: '', tienThu: '', hinhThucThu: ''
@@ -287,7 +303,20 @@ function EmptySlotForm({ maKhoa, feeNorm, onSuccess }: any) {
       <Input type="date" value={formData.ngaySinh} onChange={e => setFormData({...formData, ngaySinh: e.target.value})} className="w-[120px] h-9 text-sm" />
       <Input placeholder="SĐT" value={formData.soDienThoai} onChange={e => setFormData({...formData, soDienThoai: e.target.value})} className="w-[120px] h-9 text-sm" />
       <Input placeholder="CCCD" value={formData.cccd} onChange={e => setFormData({...formData, cccd: e.target.value})} className="w-[140px] h-9 text-sm" />
-      <Input placeholder="Người nộp" value={formData.nguoiNop} onChange={e => setFormData({...formData, nguoiNop: e.target.value})} className="w-[150px] h-9 text-xs" />
+      <div className="w-[150px]">
+        <Input 
+          placeholder="Người nộp" 
+          value={formData.nguoiNop} 
+          onChange={e => setFormData(p => ({...p, nguoiNop: e.target.value}))} 
+          className="h-9 text-xs" 
+          list={`daumoi-list-${maKhoa}`}
+        />
+        <datalist id={`daumoi-list-${maKhoa}`}>
+          {daumoiList?.map((dm: DauMoi) => (
+            <option key={dm.id} value={dm.hoTen} />
+          ))}
+        </datalist>
+      </div>
       <Input placeholder="Tiền thu" value={formData.tienThu} onChange={e => setFormData({...formData, tienThu: e.target.value})} className="w-[110px] h-9 text-sm" />
       <div className="w-[110px] text-sm font-medium text-red-500">{conNo > 0 ? conNo.toLocaleString('en-US') : 0}</div>
       <Select value={formData.hinhThucThu} onValueChange={(val) => setFormData({...formData, hinhThucThu: val})}>
