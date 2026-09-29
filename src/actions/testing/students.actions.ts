@@ -316,7 +316,11 @@ export async function assignTestingExamDates(cccds: string[], examDate: string) 
       req.input('exam_date', sql.VarChar, examDate);
       await req.query(`
         UPDATE students 
-        SET exam_date = @exam_date
+        SET exam_date = @exam_date,
+            kq_final = NULL,
+            result_lt = NULL,
+            result_hinh = NULL,
+            result_duong = NULL
         WHERE cccd = @cccd
       `);
     }

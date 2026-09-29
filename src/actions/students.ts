@@ -330,3 +330,87 @@ export async function getCourseList() {
     return [];
   }
 }
+
+export async function getAppKhoaInfo(maKhoa: string) {
+  try {
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
+    const request = pool.request();
+    request.input('maKhoa', sql.NVarChar, maKhoa);
+    
+    const result = await request.query(`
+      SELECT 
+        CONVERT(varchar, NgayKhaiGiang, 103) as NgayKhaiGiang,
+        CONVERT(varchar, NgayBeGiang, 103) as NgayBeGiang
+      FROM App_Khoa
+      WHERE MaKhoa = @maKhoa
+    `);
+    
+    if (result.recordset.length > 0) {
+      return result.recordset[0];
+    }
+    return null;
+  } catch (err) {
+    console.error("Error fetching Khoa info:", err);
+    return null;
+  }
+}
+
+export async function getCoursesWithCategory() {
+  try {
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
+    const result = await pool.request().query(`
+      SELECT DISTINCT h.MaKhoa, ISNULL(k.Hang, 'B2') as Hang
+      FROM App_HocVien_V2 h
+      LEFT JOIN App_Khoa k ON h.MaKhoa = k.MaKhoa
+      WHERE h.MaKhoa IS NOT NULL AND h.MaKhoa != ''
+      ORDER BY h.MaKhoa ASC
+    `);
+    return result.recordset.map(r => ({
+      MaKhoa: r.MaKhoa,
+      Hang: r.Hang
+    }));
+  } catch (err) {
+    console.error("Error fetching courses with category:", err);
+    return [];
+  }
+}
+
+export async function getCourseInfo(maKhoa: string) {
+  try {
+    const pool = await getDbConnection(process.env.SQL_DATABASE || 'dp_system');
+    const request = pool.request();
+    request.input('maKhoa', sql.NVarChar, maKhoa);
+    
+    const result = await request.query(`
+      SELECT *
+      FROM App_Khoa
+      WHERE MaKhoa = @maKhoa
+    `);
+    
+    if (result.recordset.length > 0) {
+      const row = result.recordset[0];
+      
+      const formatDate = (date: any) => {
+        if (!date) return "";
+        try {
+          const d = new Date(date);
+          if (isNaN(d.getTime())) return "";
+          return ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear();
+        } catch {
+          return "";
+        }
+      };
+      
+      return {
+        khai_giang: formatDate(row.NgayKhaiGiang),
+        be_giang: formatDate(row.NgayBeGiang),
+        dk_sat_hach: formatDate(row.NgayThi || row.NgaySatHach || row.NgayThiSH),
+        quyet_dinh: row.SoQD || row.SoQuyetDinh || row.QuyetDinh || ""
+      };
+    }
+    return null;
+  } catch (err) {
+    console.error("Error fetching getCourseInfo:", err);
+    return null;
+  }
+}

@@ -99,8 +99,17 @@ export function TestingEligibilityTab() {
   };
 
   // Chỉ hiển thị học viên chưa có lịch thi + lọc cơ bản
+  // Chỉ hiển thị học viên chưa có lịch thi hoặc RỚT/VẮNG ở lịch thi trước + lọc cơ bản
   const unassignedStudents = students.filter(st => {
-    if (st.exam_date && st.exam_date.trim() !== '') return false;
+    const isFailed = st.kq_final && (
+      st.kq_final.toLowerCase().includes('rớt') || 
+      st.kq_final.toLowerCase().includes('hỏng') || 
+      st.kq_final.toLowerCase().includes('vắng') || 
+      st.kq_final.toLowerCase().includes('không đạt')
+    );
+    // Nếu có lịch thi nhưng KHÔNG bị rớt (tức là chưa thi hoặc đã đậu) -> Ẩn khỏi hàng chờ
+    if (st.exam_date && st.exam_date.trim() !== '' && !isFailed) return false;
+    
     if (!st.tn_kq_final || st.tn_kq_final.trim().toUpperCase() !== 'ĐẠT') return false; // Chỉ lấy người đã ĐẠT Tốt nghiệp
     if (filterHang && st.hang !== filterHang) return false;
     if (searchTerm) {
@@ -251,7 +260,22 @@ export function TestingEligibilityTab() {
                       />
                     </td>
                     <td className="px-4 py-3 font-medium text-slate-700 border-r border-slate-100">{st.cccd}</td>
-                    <td className="px-4 py-3 text-slate-900 font-semibold border-r border-slate-100">{st.name}</td>
+                    <td className="px-4 py-3 border-r border-slate-100">
+                      <div className="text-slate-900 font-semibold">{st.name}</div>
+                      {st.kq_final && (st.kq_final.toLowerCase().includes('rớt') || st.kq_final.toLowerCase().includes('hỏng') || st.kq_final.toLowerCase().includes('vắng') || st.kq_final.toLowerCase().includes('không đạt')) && (
+                        <div className="mt-1 flex flex-col gap-1">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 w-fit">
+                            THI LẠI ({st.kq_final})
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-500 flex flex-wrap gap-1">
+                            {st.result_lt?.toLowerCase().includes('rớt') && <span className="bg-slate-100 px-1 rounded border border-slate-200">Rớt LT</span>}
+                            {st.result_hinh?.toLowerCase().includes('rớt') && <span className="bg-slate-100 px-1 rounded border border-slate-200">Rớt Hình</span>}
+                            {st.result_duong?.toLowerCase().includes('rớt') && <span className="bg-slate-100 px-1 rounded border border-slate-200">Rớt Đường</span>}
+                            {st.exam_date && <span className="text-slate-400 font-normal">Ngày thi: {st.exam_date}</span>}
+                          </span>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-center border-r border-slate-100">
                       <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs font-bold">{st.hang}</span>
                     </td>

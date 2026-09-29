@@ -103,6 +103,7 @@ const navItems: NavItem[] = [
       { name: "Danh sách Tuyển Sinh", href: "/admissions/students", implemented: true },
       { name: "Danh sách đã tạo", href: "/admissions/list", implemented: true },
       { name: "Danh Sách Chờ Duyệt", href: "/admissions/approval", implemented: true },
+      { name: "Chuyển Đổi XML Moto", href: "/migrate-moto", implemented: true },
     ]
   },
   { 

@@ -6,31 +6,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import * as XLSX from "xlsx";
-import { getExamSchedules } from "@/actions/exam-schedules.actions";
+import { getExamSchedules, saveKqshResults, getKqshResults } from "@/actions/exam-schedules.actions";
 
 const normalizeKq = (s: any) => {
-  const final = (s.kq_final || '').toString().trim().toLowerCase();
-  
-  if (final.includes('rớt') || final.includes('trượt') || final.includes('không') || final.includes('hỏng')) return 'fail';
-  if (final.includes('vắng')) return 'absent';
-  if (final.includes('đạt')) return 'pass';
-
   const rLt = (s.result_lt || "").toString().toLowerCase();
   const rHinh = (s.result_hinh || "").toString().toLowerCase();
   const rDuong = (s.result_duong || "").toString().toLowerCase();
+  const final = (s.kq_final || '').toString().trim().toLowerCase();
   
+  // Requirement: "học viên vắng là học viên có 1 môn trong 3 môn là vắng"
+  if (rLt.includes('vắng') || rHinh.includes('vắng') || rDuong.includes('vắng') || final.includes('vắng')) {
+    return 'absent';
+  }
+  
+  if (final.includes('rớt') || final.includes('trượt') || final.includes('không') || final.includes('hỏng')) return 'fail';
+  if (final.includes('đạt')) return 'pass';
+
   const hasFail = rLt.includes("rớt") || rLt.includes("trượt") || rLt.includes("không") || 
                   rHinh.includes("rớt") || rHinh.includes("trượt") || rHinh.includes("không") ||
                   rDuong.includes("rớt") || rDuong.includes("trượt") || rDuong.includes("không");
                   
-  const hasAbsent = rLt.includes("vắng") || rHinh.includes("vắng") || rDuong.includes("vắng");
-  
   const hasPass = (rLt.includes("đạt") && !rLt.includes("không")) || 
                   (rHinh.includes("đạt") && !rHinh.includes("không")) || 
                   (rDuong.includes("đạt") && !rDuong.includes("không"));
                   
   if (hasFail) return 'fail';
-  if (hasAbsent) return 'absent';
   if (hasPass) return 'pass';
   
   if (!rLt && !rHinh && !rDuong && !final) return '';
@@ -38,45 +38,7 @@ const normalizeKq = (s: any) => {
 };
 
 
-  const isRequired = (ndsh: string, type: 'lt' | 'hinh' | 'duong' | 'gplx', hang: string = "") => {
-  if (type === 'gplx') return true;
-  if (!ndsh) return true;
-
-  const s = ndsh.toLowerCase();
-  const hangLower = hang.toLowerCase();
-
-  let hasLt = false;
-  let hasHinh = false;
-  let hasDuong = false;
-
-  const isRetake = s.includes('lại') || s.includes('lai');
-  if (isRetake) {
-    const sClean = s.replace('lại', '').replace('lai', '');
-    const checkSubject = (sub: string, singleChar: string) => {
-      if (sClean.includes(sub)) return true;
-      const regex = new RegExp('(^|[^\\p{L}])' + singleChar + '([^\\p{L}]|$)', 'u');
-      return regex.test(sClean);
-    };
-    
-    hasLt = checkSubject('lý thuyết', 'l') || sClean.includes('lt');
-    hasHinh = checkSubject('hình', 'h');
-    hasDuong = checkSubject('đường', 'đ') || checkSubject('đường', 'd');
-  } else {
-    hasLt = true;
-    hasHinh = true;
-    hasDuong = !hangLower.includes('a');
-  }
-
-  const subjects: string[] = [];
-  if (hasLt) subjects.push('lt');
-  if (hasHinh) subjects.push('hinh');
-  if (hasDuong) subjects.push('duong');
-
-  if (!subjects.includes(type)) return false;
-  if (subjects[0] === type) return false;
-  
-  return true;
-};
+// Removed isRequired as user requested to rely on 'x' in result columns instead
 
 export function StatsTab() {
 
@@ -90,11 +52,148 @@ export function StatsTab() {
   const [uploading, setUploading] = React.useState(false);
   const [uploadProgress, setUploadProgress] = React.useState(0);
 
+  useEffect(() => {
+    async function fetchSchedules() {
+      const res = await getExamSchedules();
+      if (res.success && res.data) {
+        setSchedules(res.data);
+        if (res.data.length > 0) {
+          setSelectedScheduleId(res.data[0].id.toString());
+        }
+      }
+    }
+    fetchSchedules();
+  }, []);
+
+  useEffect(() => {
+    async function fetchResults() {
+      if (!selectedScheduleId) return;
+      setLoading(true);
+      const res = await getKqshResults(Number(selectedScheduleId));
+      if (res.success && res.data) {
+        setStudents(res.data);
+        const distinctGV = Array.from(new Set(res.data.map(s => s.gv).filter(Boolean))) as string[];
+        setTeachers(distinctGV);
+      }
+      setLoading(false);
+    }
+    fetchResults();
+  }, [selectedScheduleId]);
+
   const handleFileUpload = async (e: any) => {
-    alert("Chức năng upload bị lỗi. Agent đang xử lý.");
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!selectedScheduleId) {
+      alert("Vui lòng chọn một Ngày Sát Hạch (Kỳ SH) trước khi upload!");
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(10);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = event.target?.result;
+        const workbook = XLSX.read(data, { type: "binary" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: "dd-mm-yyyy" });
+        
+        let headerIdx = -1;
+        for (let i = 0; i < Math.min(20, rows.length); i++) {
+          if (rows[i] && rows[i].some(c => typeof c === 'string' && c.includes('Số báo danh'))) {
+            headerIdx = i;
+            break;
+          }
+        }
+        
+        if (headerIdx === -1) {
+          alert("Không tìm thấy dòng tiêu đề hợp lệ trong file!");
+          setUploading(false);
+          return;
+        }
+
+        const headers = rows[headerIdx].map((h: any) => (h || '').toString().trim());
+        const mappedStudents: any[] = [];
+        
+        const col = (name: string) => headers.findIndex(h => h.includes(name));
+        const idxSTT = col('STT');
+        const idxMaKy = col('Mã kỳ');
+        const idxSBD = col('Số báo danh');
+        const idxName = col('Họ và tên');
+        const idxCCCD = col('Số chứng minh');
+        const idxNgaySinh = col('Ngày sinh');
+        const idxGioiTinh = col('Giới tính');
+        const idxQuocTich = col('Quốc tịch');
+        const idxNoiCuTru = col('Nơi cư trú');
+        const idxHang = col('Hạng');
+        const idxNdsh = col('Nội dung');
+        const idxDiemLT = col('điểm đạt Lý thuyết');
+        const idxKqLT = col('Kết quả môn Lý thuyết');
+        const idxDiemHinh = col('điểm đạt Hình');
+        const idxKqHinh = col('Kết quả môn Hình');
+        const idxDiemDuong = col('điểm đạt Đường');
+        const idxKqDuong = col('Kết quả môn Đường');
+        const idxKqFinal = col('Kết quả sát hạch');
+        const idxGV = col('GV');
+        const idxNgaySH = col('Ngày SH');
+        
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length === 0 || !row[idxName]) continue;
+          
+          const sched = schedules.find(s => s.id.toString() === selectedScheduleId);
+          mappedStudents.push({
+            ma_ky_sh: row[idxMaKy],
+            stt: row[idxSTT],
+            sbd: row[idxSBD],
+            name: row[idxName],
+            cccd: row[idxCCCD],
+            ngay_sinh: row[idxNgaySinh],
+            gioi_tinh: row[idxGioiTinh],
+            quoc_tich: row[idxQuocTich],
+            noi_cu_tru: row[idxNoiCuTru],
+            hang: row[idxHang],
+            ndsh: row[idxNdsh],
+            score_lt: row[idxDiemLT],
+            result_lt: row[idxKqLT],
+            score_hinh: row[idxDiemHinh],
+            result_hinh: row[idxKqHinh],
+            score_duong: row[idxDiemDuong],
+            result_duong: row[idxKqDuong],
+            kq_final: row[idxKqFinal],
+            exam_date: (idxNgaySH !== -1 && row[idxNgaySH]) ? (row[idxNgaySH].toString().includes('-') || row[idxNgaySH].toString().includes('/') ? row[idxNgaySH].toString().replace(/\//g, '-') : row[idxNgaySH]) : (sched ? sched.exam_date : ""),
+            gv: (idxGV !== -1 && row[idxGV]) ? row[idxGV] : ""
+          });
+        }
+        
+        setUploadProgress(50);
+
+        // Save to DB
+        setUploadProgress(70);
+        const res = await saveKqshResults(Number(selectedScheduleId), mappedStudents);
+        if (res.success) {
+          alert("Lưu kết quả sát hạch thành công!");
+          setUploadProgress(100);
+          setStudents(mappedStudents);
+          const distinctGV = Array.from(new Set(mappedStudents.map(s => s.gv).filter(Boolean)));
+          setTeachers(distinctGV);
+        } else {
+          alert("Lưu kết quả thất bại: " + res.error);
+        }
+        
+      } catch (err) {
+        console.error(err);
+        alert("Lỗi đọc file Excel.");
+      }
+      setUploading(false);
+      e.target.value = null;
+    };
+    reader.readAsBinaryString(file);
   };
-
-
 
 
   const filteredStudents = useMemo(() => {
@@ -153,18 +252,14 @@ export function StatsTab() {
     if (t.includes('rớt') || t.includes('trượt') || t.includes('không') || t.includes('hỏng')) return 'RỚT';
     if (t.includes('vắng')) return 'VẮNG';
     if (t.includes('đạt')) return 'ĐẠT';
-    return text;
+    return text; // Return text for things like 'x'
   };
 
-  const renderScoreCell = (student: any, type: 'lt' | 'hinh' | 'duong', scoreProp: string, resultProp: string) => {
-    if (!isRequired(student.ndsh, type, student.hang)) {
-      return <div className="text-slate-300 italic text-xs">Miễn</div>;
-    }
-    const score = student[scoreProp];
-    const resultText = student[resultProp];
+  const renderScoreCell = (student: any, scoreProp: string, resultProp: string) => {
+    const score = (student[scoreProp] || '').toString().trim();
+    const resultText = (student[resultProp] || '').toString().trim();
     
     const normalizedRes = normalizeComponentKq(resultText);
-    
     if (!score && !resultText) return <div className="text-slate-400 italic text-xs">Chưa có</div>;
     
     let colorClass = "text-slate-600 font-semibold";
@@ -177,7 +272,7 @@ export function StatsTab() {
         {normalizedRes ? (
           <span className={colorClass}>{normalizedRes}</span>
         ) : (
-          <span className="text-slate-500 font-semibold">{score && score !== 'x' && score !== 'X' ? score : ''}</span>
+          <span className="text-slate-500 font-semibold">{score}</span>
         )}
       </div>
     );
@@ -363,13 +458,13 @@ export function StatsTab() {
                       <td className="p-4 text-center text-slate-600">{student.ndsh || "-"}</td>
                       <td className="p-4 text-slate-600">{student.exam_date || "-"}</td>
                       <td className="p-4 text-center border-l border-slate-100">
-                        {renderScoreCell(student, 'lt', 'score_lt', 'result_lt')}
+                        {renderScoreCell(student, 'score_lt', 'result_lt')}
                       </td>
                       <td className="p-4 text-center bg-slate-50/50">
-                        {renderScoreCell(student, 'hinh', 'score_hinh', 'result_hinh')}
+                        {renderScoreCell(student, 'score_hinh', 'result_hinh')}
                       </td>
                       <td className="p-4 text-center border-r border-slate-100">
-                        {renderScoreCell(student, 'duong', 'score_duong', 'result_duong')}
+                        {renderScoreCell(student, 'score_duong', 'result_duong')}
                       </td>
                       <td className="p-4 text-center">
                         {(() => {

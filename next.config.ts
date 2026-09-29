@@ -4,6 +4,12 @@ const nextConfig: NextConfig = {
   // Exclude native Node.js modules from the Next.js bundle
   serverExternalPackages: ['mssql', 'canvas', 'sharp'],
   
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '100mb'
+    }
+  },
+  
   images: {
     remotePatterns: [
       {
